@@ -14,7 +14,7 @@ class CompanyResearchView(APIView):
             return Response({"error": "Missing company_name or requirements"}, status=400)
 
         # ====================================================
-        # PHASE 1: Agent 1 (Scrape the Web)
+        # PHASE 1: Agent 1 (Scrape the Web - Upgraded)
         # ====================================================
         print(f"🔎 Agent 1: Searching for '{company_name}'...")
         agent_1_response = fetch_roc_data(company_name, requirements)
@@ -34,6 +34,9 @@ class CompanyResearchView(APIView):
         company_obj, _ = Company.objects.get_or_create(name=company_name)
         
         raw_texts_for_ai = [] # This list will be sent to Agent 2
+        
+        # Capture the list of websites for the UI (New Feature)
+        scraped_sites_list = agent_1_response.get("source_list", [])
         raw_entries = agent_1_response.get("data", [])
         
         print(f"💾 Saving {len(raw_entries)} raw sources to Database...")
@@ -59,14 +62,10 @@ class CompanyResearchView(APIView):
         # Pass the list of text strings to the AI
         final_insight = validate_and_extract(requirements, raw_texts_for_ai)
         
-        # (Optional) Update the main Company table with the new findings?
-        # If Agent 2 found a specific field like 'CEO', you could update company_obj here.
-        # For now, we just return it to the user.
-
         return Response({
             "status": "success",
-            "pipeline": "Scrape -> DB Save -> AI Validate",
             "company": company_name,
-            "sources_processed": len(raw_entries),
+            "scraped_sources": scraped_sites_list, # <--- NEW: List of websites for UI
+            "total_sources": len(scraped_sites_list),
             "final_answer": final_insight  # <--- Clean, validated JSON
         })
