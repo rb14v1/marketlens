@@ -46,16 +46,14 @@ def validate_and_extract(user_requirement, raw_text_list):
     INSTRUCTIONS:
     1. VALIDATE: Cross-reference the sources. Prioritize recent/official info.
     2. SUMMARIZE: Provide a clear, professional summary (2-3 sentences).
-    3. EXTRACT: Pull out specific fields requested.
+    3. ANSWER: specific to the user's requirement. If the user asks for "CEO", just provide the name. If "Revenue", just the number.
     
     JSON FORMAT:
     {{
         "answer_found": true,
         "summary": "Professional summary of the findings.",
         "extracted_data": {{
-            "Key_Answer": "The main answer (e.g. CEO Name)",
-            "Contact_Info": "Email/Phone if found",
-            "Details": "Any extra relevant info"
+            "Key_Answer": "The direct answer to the user's question (e.g. Sundar Pichai)"
         }},
         "confidence_score": "High/Medium/Low"
     }}

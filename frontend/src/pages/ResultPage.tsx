@@ -5,7 +5,7 @@ import autoTable from 'jspdf-autotable';
 import {
     Box, Container, Typography, Card, CardContent, Grid, Button,
     Menu, MenuItem, ListItemIcon, Dialog, DialogTitle, DialogContent,
-    List, ListItem, ListItemText, Paper
+    List, ListItem, ListItemText, Paper, TextField
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import LinkIcon from '@mui/icons-material/Link';
@@ -21,6 +21,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ArticleIcon from '@mui/icons-material/Article';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
 
 const ResultPage: React.FC = () => {
     const location = useLocation();
@@ -43,47 +45,57 @@ const ResultPage: React.FC = () => {
 
     // 2. DESTRUCTURE DATA
     const { company, final_answer, scraped_sources } = apiResponse;
-    const { summary, extracted_data } = final_answer;
+    const { summary, extracted_data } = final_answer || { summary: "Analysis failed or incomplete.", extracted_data: {} };
 
     // --- NEW HELPER FUNCTION ---
     // Checks if a value is meaningful. Returns false for "not provided", "unknown", etc.
     const isValidValue = (val: any) => {
         if (!val) return false;
         const s = String(val).toLowerCase();
-        return !s.includes('not provided') && 
-               !s.includes('no data') && 
-               !s.includes('unknown') &&
-               !s.includes('n/a');
+        return !s.includes('not provided') &&
+            !s.includes('no data') &&
+            !s.includes('unknown') &&
+            !s.includes('n/a');
     };
 
     // 3. FLATTEN DATA FOR DISPLAY
-    let metricsToDisplay: Record<string, string> = {};
+    // We compute the initial metrics ONCE, then copy them to state.
+    // This allows us to edit them.
+    const getInitialMetrics = () => {
+        let initialMetrics: Record<string, string> = {};
+        if (extracted_data) {
+            if (extracted_data.Key_Answer) {
+                if (isValidValue(extracted_data.Key_Answer) && typeof extracted_data.Key_Answer !== 'object') {
+                    initialMetrics["Answer"] = String(extracted_data.Key_Answer);
+                } else if (typeof extracted_data.Key_Answer === 'object') {
+                    Object.entries(extracted_data.Key_Answer).forEach(([k, v]) => {
+                        if ((typeof v === 'string' || typeof v === 'number') && isValidValue(v)) {
+                            initialMetrics[k] = String(v);
+                        }
+                    });
+                }
+            }
+            if (Object.keys(initialMetrics).length === 0) {
+                Object.entries(extracted_data).forEach(([k, v]) => {
+                    if (k !== 'Details' && k !== 'Summary' && k !== 'Key_Answer' && typeof v === 'string' && v.length < 100 && isValidValue(v)) {
+                        initialMetrics[k] = v;
+                    }
+                });
+            }
+        }
+        return initialMetrics;
+    };
 
-    if (extracted_data.Key_Answer && typeof extracted_data.Key_Answer === 'object') {
-        Object.entries(extracted_data.Key_Answer).forEach(([k, v]) => {
-            // Updated check: verify type AND validity
-            if ((typeof v === 'string' || typeof v === 'number') && isValidValue(v)) {
-                metricsToDisplay[k] = String(v);
-            }
-        });
-    } 
-    
-    if (extracted_data.Details && typeof extracted_data.Details === 'object') {
-         Object.entries(extracted_data.Details).forEach(([k, v]) => {
-            // Updated check: verify type, length, AND validity
-            if (typeof v === 'string' && String(v).length < 80 && isValidValue(v)) { 
-                metricsToDisplay[k] = String(v);
-            }
-        });
-    }
+    // --- STATE FOR EDITABLE FIELDS ---
+    // Initialize with the data we parsed
+    const [metrics, setMetrics] = useState<Record<string, string>>(getInitialMetrics);
+    const [editableSummary, setEditableSummary] = useState<string>(summary || "");
+    const [editableDetails, setEditableDetails] = useState<string>(
+        (extracted_data && extracted_data.Details && typeof extracted_data.Details === 'string') ? extracted_data.Details : ""
+    );
 
-    if (Object.keys(metricsToDisplay).length === 0) {
-        Object.entries(extracted_data).forEach(([k, v]) => {
-            if (k !== 'Details' && k !== 'Summary' && typeof v === 'string' && v.length < 100 && isValidValue(v)) {
-                metricsToDisplay[k] = v;
-            }
-        });
-    }
+    // Toggle for Edit Mode
+    const [isEditMode, setIsEditMode] = useState(false);
 
     // 4. SMART ICON HELPER
     const getIconForKey = (key: string) => {
@@ -104,7 +116,7 @@ const ResultPage: React.FC = () => {
     // 6. DOWNLOAD MENU & PDF LOGIC
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const open = Boolean(anchorEl);
-    
+
     const handleClose = () => {
         setAnchorEl(null);
     };
@@ -125,15 +137,15 @@ const ResultPage: React.FC = () => {
 
             let yPos = 40;
 
-            // Key Stats Table (Using metricsToDisplay)
-            if (Object.keys(metricsToDisplay).length > 0) {
+            // Key Stats Table (Using metrics state)
+            if (Object.keys(metrics).length > 0) {
                 doc.setFontSize(14);
                 doc.setTextColor(0);
                 doc.text("Key Statistics", 14, yPos);
                 yPos += 5;
 
-                const statsData = Object.entries(metricsToDisplay).map(([k, v]) => [k.replace(/_/g, ' '), v]);
-                
+                const statsData = Object.entries(metrics).map(([k, v]) => [k.replace(/_/g, ' '), v]);
+
                 autoTable(doc, {
                     startY: yPos,
                     head: [['Metric', 'Value']],
@@ -142,36 +154,45 @@ const ResultPage: React.FC = () => {
                     headStyles: { fillColor: [0, 150, 136] },
                     margin: { left: 14 }
                 });
-                
+
                 // Update yPos based on where the table ended
                 yPos = (doc as any).lastAutoTable.finalY + 15;
             }
 
-            // Executive Summary
+            // Executive Summary (Using editableSummary state)
             doc.setFontSize(14);
             doc.setTextColor(0);
             doc.text("Executive Summary", 14, yPos);
             yPos += 7;
-            
+
             doc.setFontSize(11);
             doc.setTextColor(60);
-            const summaryLines = doc.splitTextToSize(summary || "No summary available.", pageWidth - 28);
+            const summaryLines = doc.splitTextToSize(editableSummary || "No summary available.", pageWidth - 28);
             doc.text(summaryLines, 14, yPos);
             yPos += (summaryLines.length * 5) + 15;
+
+            // Details (Using editableDetails state)
+            if (editableDetails) {
+                const detailLines = doc.splitTextToSize(editableDetails, pageWidth - 28);
+                // Check page break
+                if (yPos + (detailLines.length * 5) > 270) { doc.addPage(); yPos = 20; }
+                doc.text(detailLines, 14, yPos);
+                yPos += (detailLines.length * 5) + 15;
+            }
 
             // Sources
             if (scraped_sources && scraped_sources.length > 0) {
                 // Check if we need a new page
                 if (yPos > 250) { doc.addPage(); yPos = 20; }
-                
+
                 doc.setFontSize(14);
                 doc.setTextColor(0);
                 doc.text("Verified Sources", 14, yPos);
                 yPos += 7;
-                
+
                 doc.setFontSize(10);
                 doc.setTextColor(100);
-                
+
                 scraped_sources.forEach((src: string) => {
                     doc.text(`- ${src}`, 14, yPos);
                     yPos += 5;
@@ -185,24 +206,44 @@ const ResultPage: React.FC = () => {
         handleClose();
     };
 
+    // Helper to update a specific metric
+    const handleMetricChange = (key: string, newValue: string) => {
+        setMetrics(prev => ({
+            ...prev,
+            [key]: newValue
+        }));
+    };
+
     return (
         <Container maxWidth="lg" sx={{ pb: 8, mt: 4 }}>
-            
+
             {/* TOP HEADER */}
             <Typography variant="caption" color="primary.main" fontWeight={700} letterSpacing={1}>
                 MARKET INTELLIGENCE REPORT
             </Typography>
-            
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, mb: 4 }}>
                 <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'lowercase' }}>
                     {company}
                 </Typography>
-                
+
                 <Box sx={{ display: 'flex', gap: 2 }}>
+
+                    {/* EDIT TOGGLE BUTTON */}
+                    <Button
+                        variant={isEditMode ? "contained" : "outlined"}
+                        color={isEditMode ? "primary" : "inherit"}
+                        startIcon={isEditMode ? <CheckIcon /> : <EditIcon />}
+                        onClick={() => setIsEditMode(!isEditMode)}
+                        sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, borderColor: '#ccc' }}
+                    >
+                        {isEditMode ? "Save Changes" : "Edit Report"}
+                    </Button>
+
                     {/* VIEW SOURCES BUTTON */}
-                    <Button 
-                        variant="outlined" 
-                        startIcon={<LinkIcon />} 
+                    <Button
+                        variant="outlined"
+                        startIcon={<LinkIcon />}
                         onClick={() => setOpenSources(true)}
                         sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
                     >
@@ -210,10 +251,10 @@ const ResultPage: React.FC = () => {
                     </Button>
 
                     {/* DOWNLOAD BUTTON */}
-                    <Button 
-                        variant="contained" 
+                    <Button
+                        variant="contained"
                         color="secondary"
-                        startIcon={<DownloadIcon />} 
+                        startIcon={<DownloadIcon />}
                         onClick={(e) => setAnchorEl(e.currentTarget)}
                         sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, bgcolor: '#00C4CC', '&:hover': { bgcolor: '#00afb5' } }}
                     >
@@ -263,39 +304,50 @@ const ResultPage: React.FC = () => {
 
             {/* DYNAMIC CARDS GRID */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
-                {Object.entries(metricsToDisplay).map(([key, value], index) => (
+                {Object.entries(metrics).map(([key, value], index) => (
                     <Grid item xs={12} md={4} key={index}>
-                        <Card elevation={0} sx={{ 
-                            height: '100%', 
-                            border: '1px solid #eee', 
+                        <Card elevation={0} sx={{
+                            height: '100%',
+                            border: '1px solid #eee',
                             borderRadius: 4,
                             p: 1
                         }}>
                             <CardContent sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                                <Box sx={{ 
-                                    bgcolor: '#f5f9f9', 
-                                    p: 1.5, 
-                                    borderRadius: 3, 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'center' 
+                                <Box sx={{
+                                    bgcolor: '#f5f9f9',
+                                    p: 1.5,
+                                    borderRadius: 3,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
                                 }}>
                                     {getIconForKey(key)}
                                 </Box>
-                                <Box>
+                                <Box sx={{ width: '100%' }}>
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, textTransform: 'uppercase' }}>
                                         {key.replace(/_/g, ' ')}
                                     </Typography>
-                                    <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                                        {value}
-                                    </Typography>
+
+                                    {isEditMode ? (
+                                        <TextField
+                                            fullWidth
+                                            variant="standard"
+                                            value={value}
+                                            onChange={(e) => handleMetricChange(key, e.target.value)}
+                                            InputProps={{ style: { fontSize: '1.25rem', fontWeight: 700 } }}
+                                        />
+                                    ) : (
+                                        <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                                            {value}
+                                        </Typography>
+                                    )}
                                 </Box>
                             </CardContent>
                         </Card>
                     </Grid>
                 ))}
-                
-                {Object.keys(metricsToDisplay).length === 0 && (
+
+                {Object.keys(metrics).length === 0 && (
                     <Grid item xs={12}>
                         <Typography color="text.secondary" fontStyle="italic">
                             No specific metrics extracted. See summary below.
@@ -304,30 +356,53 @@ const ResultPage: React.FC = () => {
                 )}
             </Grid>
 
+
             {/* EXECUTIVE SUMMARY */}
             <Card elevation={0} sx={{ border: '1px solid #eee', borderRadius: 4 }}>
                 <CardContent sx={{ p: 4 }}>
                     <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
                         Executive Summary
                     </Typography>
-                    <Typography paragraph sx={{ color: 'text.secondary', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-                        {summary}
-                    </Typography>
 
-                    {extracted_data.Details && typeof extracted_data.Details === 'string' && (
-                         <Typography paragraph sx={{ color: 'text.secondary', lineHeight: 1.7, mt: 2 }}>
-                            {extracted_data.Details}
+                    {isEditMode ? (
+                        <TextField
+                            fullWidth
+                            multiline
+                            minRows={4}
+                            variant="outlined"
+                            value={editableSummary}
+                            onChange={(e) => setEditableSummary(e.target.value)}
+                            sx={{ mb: 2 }}
+                        />
+                    ) : (
+                        <Typography paragraph sx={{ color: 'text.secondary', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+                            {editableSummary}
                         </Typography>
+                    )}
+
+                    {/* Details Section - also editable */}
+                    {editableDetails && (
+                        isEditMode ? (
+                            <TextField
+                                fullWidth
+                                multiline
+                                minRows={2}
+                                variant="outlined"
+                                label="Additional Details"
+                                value={editableDetails}
+                                onChange={(e) => setEditableDetails(e.target.value)}
+                                sx={{ mt: 2 }}
+                            />
+                        ) : (
+                            <Typography paragraph sx={{ color: 'text.secondary', lineHeight: 1.7, mt: 2 }}>
+                                {editableDetails}
+                            </Typography>
+                        )
                     )}
                 </CardContent>
             </Card>
 
-            {/* FOOTER */}
-            <Box sx={{ mt: 8, textAlign: 'center', borderTop: '1px solid #eee', pt: 4 }}>
-                <Typography variant="caption" color="text.secondary">
-                    © 2026 DocProcessor. All rights reserved.
-                </Typography>
-            </Box>
+
         </Container>
     );
 };
