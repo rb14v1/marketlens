@@ -218,9 +218,18 @@ const ResultPage: React.FC = () => {
         <Container maxWidth="lg" sx={{ pb: 8, mt: 4 }}>
 
             {/* TOP HEADER */}
-            <Typography variant="caption" color="primary.main" fontWeight={700} letterSpacing={1}>
-                MARKET INTELLIGENCE REPORT
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Button
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => navigate('/')}
+                    sx={{ textTransform: 'none', color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
+                >
+                    Back to Search
+                </Button>
+                <Typography variant="caption" color="primary.main" fontWeight={700} letterSpacing={1}>
+                    MARKET INTELLIGENCE REPORT
+                </Typography>
+            </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, mb: 4 }}>
                 <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'lowercase' }}>

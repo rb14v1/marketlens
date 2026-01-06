@@ -11,7 +11,7 @@ const InputPage: React.FC = () => {
     const [loadingStage, setLoadingStage] = useState<'idle' | 'agent1' | 'agent2' | 'success'>('idle');
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
-    
+
     // Timers ref to clear them if component unmounts or request finishes early
     const transitionTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -23,7 +23,7 @@ const InputPage: React.FC = () => {
         // This makes the user feel progress while waiting for the single backend response.
         transitionTimer.current = setTimeout(() => {
             setLoadingStage((prev) => (prev === 'agent1' ? 'agent2' : prev));
-        }, 4000); 
+        }, 4000);
 
         try {
             // ---------------------------------------------------------
@@ -32,9 +32,9 @@ const InputPage: React.FC = () => {
             const response = await fetch('http://127.0.0.1:8000/api/research/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    company_name: companyName, 
-                    requirements: dataRequirements 
+                body: JSON.stringify({
+                    company_name: companyName,
+                    requirements: dataRequirements
                 }),
             });
 
@@ -53,7 +53,7 @@ const InputPage: React.FC = () => {
             // ---------------------------------------------------------
             // Clear the "Agent 2" timer if it hasn't fired yet
             if (transitionTimer.current) clearTimeout(transitionTimer.current);
-            
+
             // Show Success Animation
             setLoadingStage('success');
 
@@ -87,7 +87,7 @@ const InputPage: React.FC = () => {
                 transition: 'all 0.5s ease'
             }}>
                 {completed ? <CheckCircleIcon sx={{ fontSize: 40, color: 'white' }} /> : <Icon sx={{ fontSize: 40, color: 'white' }} />}
-                
+
                 {/* Pulse Animation for Active State */}
                 {active && !completed && (
                     <Box sx={{
@@ -102,6 +102,45 @@ const InputPage: React.FC = () => {
             </Typography>
         </Box>
     );
+
+    // --- LOGGING STATES ---
+    const [logs, setLogs] = useState<string[]>([]);
+    const [currentLogStep, setCurrentLogStep] = useState(0);
+
+    const logMessages = [
+        "Initializing Agent 1 (Web Scraper)...",
+        `Analyzing search intent for "${companyName}"...`,
+        "Identifying high-authority data sources...",
+        "Web Scraper engaged. Attempting to fetch company profile...",
+        "Parsing HTML content from identified urls...",
+        "Agent 1 task complete. Handing off to Agent 2...",
+        "Initializing Agent 2 (AI Analyst)...",
+        "Synthesizing extracted data...",
+        "Cross-referencing metrics (Revenue, CEO, HQ)...",
+        "Generating Executive Summary...",
+        "Final validation of report data...",
+        "Report ready."
+    ];
+
+    // Effect to simulate logs
+    useEffect(() => {
+        if (loadingStage !== 'idle' && loadingStage !== 'success') {
+            const interval = setInterval(() => {
+                setCurrentLogStep(prev => {
+                    if (prev < logMessages.length - 1) {
+                        // Add next log
+                        setLogs(old => [...old, logMessages[prev]]);
+                        return prev + 1;
+                    }
+                    return prev;
+                });
+            }, 800); // New log every 800ms
+            return () => clearInterval(interval);
+        } else if (loadingStage === 'idle') {
+            setLogs([]);
+            setCurrentLogStep(0);
+        }
+    }, [loadingStage, companyName]);
 
     return (
         <Container maxWidth="sm">
@@ -127,38 +166,65 @@ const InputPage: React.FC = () => {
                     {loadingStage !== 'idle' ? (
                         <Fade in={true}>
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'center' }}>
-                                
+
                                 <Typography variant="h5" fontWeight={700} gutterBottom sx={{ mb: 6 }}>
                                     {loadingStage === 'success' ? 'Research Complete!' : 'Market Intelligence Agent Running...'}
                                 </Typography>
 
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 4 }}>
-                                    
+
                                     {/* AGENT 1: SCRAPER */}
-                                    <StatusCircle 
-                                        icon={PublicIcon} 
-                                        label="Agent 1: Web Scraper" 
-                                        active={loadingStage === 'agent1'} 
-                                        completed={loadingStage === 'agent2' || loadingStage === 'success'} 
+                                    <StatusCircle
+                                        icon={PublicIcon}
+                                        label="Agent 1: Web Scraper"
+                                        active={loadingStage === 'agent1'}
+                                        completed={loadingStage === 'agent2' || loadingStage === 'success'}
                                     />
 
                                     {/* Connector Line */}
                                     <Box sx={{ width: 60, height: 4, bgcolor: loadingStage === 'agent2' || loadingStage === 'success' ? '#4caf50' : 'grey.200', transition: 'all 1s ease' }} />
 
                                     {/* AGENT 2: ANALYST */}
-                                    <StatusCircle 
-                                        icon={PsychologyIcon} 
-                                        label="Agent 2: AI Analyst" 
-                                        active={loadingStage === 'agent2'} 
-                                        completed={loadingStage === 'success'} 
+                                    <StatusCircle
+                                        icon={PsychologyIcon}
+                                        label="Agent 2: AI Analyst"
+                                        active={loadingStage === 'agent2'}
+                                        completed={loadingStage === 'success'}
                                     />
                                 </Box>
 
-                                <Typography variant="body1" color="text.secondary" sx={{ mt: 2, height: 24, transition: 'all 0.3s ease' }}>
-                                    {loadingStage === 'agent1' && `Scanning sources for "${companyName}"...`}
-                                    {loadingStage === 'agent2' && "Synthesizing data and extracting insights..."}
-                                    {loadingStage === 'success' && "Report generated successfully!"}
-                                </Typography>
+                                {/* LOGGING WINDOW - SINGLE LINE UPDATE */}
+                                <Box sx={{
+                                    width: '100%',
+                                    minHeight: 60, // Fixed height to prevent layout jump
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    textAlign: 'center',
+                                    mt: 2
+                                }}>
+                                    {loadingStage === 'success' ? (
+                                        <Typography color="success.main" fontWeight={700} variant="h6">
+                                            ✓ Research Complete.
+                                        </Typography>
+                                    ) : (
+                                        <Typography
+                                            key={currentLogStep} // Key change triggers animation restart
+                                            color="primary.main"
+                                            fontWeight={600}
+                                            sx={{
+                                                animation: 'fadeIn 0.5s ease-in-out',
+                                                fontSize: '1.2rem',
+                                                textShadow: '0px 0px 1px rgba(0,0,0,0.1)'
+                                            }}
+                                        >
+                                            {logMessages[currentLogStep]}
+                                        </Typography>
+                                    )}
+                                </Box>
+                                <style>
+                                    {`@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }`}
+                                </style>
 
                             </Box>
                         </Fade>
