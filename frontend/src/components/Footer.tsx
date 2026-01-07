@@ -17,7 +17,7 @@ const Footer: React.FC = () => {
         >
             <Container maxWidth="lg">
                 <Typography variant="body1" align="center">
-                    © {new Date().getFullYear()} DocProcessor. All rights reserved.
+                    © {new Date().getFullYear()} MarketLens. All rights reserved.
                 </Typography>
                 <Typography variant="body2" align="center" sx={{ color: 'text.secondary' }}>
                     <Link color="inherit" href="#">
