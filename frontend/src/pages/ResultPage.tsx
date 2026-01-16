@@ -291,9 +291,11 @@ const ResultPage: React.FC = () => {
                     {/* COMPANY LOGO with Fallback */}
                     <Box
                         component="img"
-                        src={`https://logo.clearbit.com/${apiResponse?.scraped_sources?.[0] ||
-                            company.replace(/\s+/g, '').toLowerCase() + '.com'
-                            }`}
+                        src={
+                            apiResponse?.logo ||
+                            `https://logo.clearbit.com/${apiResponse?.scraped_sources?.[0]?.title ||
+                            company.replace(/\s+/g, '').toLowerCase() + '.com'}`
+                        }
                         onError={(e: any) => {
                             e.target.onerror = null; // Prevent loop
                             // Fallback to Google Favicon API
@@ -318,7 +320,7 @@ const ResultPage: React.FC = () => {
                         </Typography>
                         {apiResponse?.scraped_sources?.[0] && (
                             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
-                                Source: {apiResponse.scraped_sources[0]}
+                                Source: {apiResponse.scraped_sources[0].title}
                             </Typography>
                         )}
                     </Box>
@@ -382,12 +384,17 @@ const ResultPage: React.FC = () => {
                     </Typography>
                     <List>
                         {scraped_sources && scraped_sources.length > 0 ? (
-                            scraped_sources.map((src: string, index: number) => (
-                                <ListItem key={index} disablePadding sx={{ py: 1 }}>
+                            scraped_sources.map((src: any, index: number) => (
+                                <ListItem key={index} component="a" href={src.url} target="_blank" disablePadding sx={{ py: 1, textDecoration: 'none', color: 'inherit', '&:hover': { bgcolor: 'action.hover' } }}>
                                     <ListItemIcon sx={{ minWidth: 36 }}>
                                         <ArticleIcon fontSize="small" color="primary" />
                                     </ListItemIcon>
-                                    <ListItemText primary={src} />
+                                    <ListItemText
+                                        primary={src.title}
+                                        secondary={src.url}
+                                        primaryTypographyProps={{ fontWeight: 600, color: 'primary.main' }}
+                                        secondaryTypographyProps={{ noWrap: true, display: 'block' }}
+                                    />
                                 </ListItem>
                             ))
                         ) : (

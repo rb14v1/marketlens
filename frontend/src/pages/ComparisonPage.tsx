@@ -98,6 +98,110 @@ const ComparisonPage: React.FC = () => {
 
             doc.save(`${company}_SWOT_Comparison.pdf`);
         }
+        else if (format === 'MERGED') {
+            const doc = new jsPDF('p'); // Portrait for full report usually better, or user prefer landscape? ResultPage uses default (Portrait), Comparison uses Landscape. 
+            // Let's use Portrait for compatibility with text, but tables might be wide. 
+            // Let's stick to Portrait and handle tables carefully.
+
+            const pageWidth = doc.internal.pageSize.width;
+
+            // --- PART 1: MARKET INTELLIGENCE ---
+            doc.setFontSize(22);
+            doc.setTextColor(0, 150, 136);
+            doc.text(`Market Intelligence Report: ${company}`, 14, 20);
+
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 28);
+
+            let yPos = 40;
+
+            // 1.1 Metrics Extraction (Simplified version of ResultPage logic)
+            const metrics: [string, string][] = [];
+            const data = apiResponse?.final_answer?.extracted_data?.Key_Answer;
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                Object.entries(data).forEach(([k, v]) => {
+                    if (v && typeof v === 'string') metrics.push([k.replace(/_/g, ' '), v]);
+                });
+            }
+
+            if (metrics.length > 0) {
+                doc.setFontSize(14);
+                doc.setTextColor(0);
+                doc.text("Key Statistics", 14, yPos);
+                yPos += 5;
+
+                autoTable(doc, {
+                    startY: yPos,
+                    head: [['Metric', 'Value']],
+                    body: metrics,
+                    theme: 'striped',
+                    headStyles: { fillColor: [0, 150, 136] },
+                    margin: { left: 14 }
+                });
+                yPos = (doc as any).lastAutoTable.finalY + 15;
+            }
+
+            // 1.2 Executive Summary
+            const summary = apiResponse?.final_answer?.summary;
+            if (summary) {
+                doc.setFontSize(14);
+                doc.setTextColor(0);
+                doc.text("Executive Summary", 14, yPos);
+                yPos += 7;
+                doc.setFontSize(11);
+                doc.setTextColor(60);
+                const lines = doc.splitTextToSize(summary, pageWidth - 28);
+                doc.text(lines, 14, yPos);
+                yPos += (lines.length * 5) + 15;
+            }
+
+            // --- PART 2: PAGE BREAK & COMPETITIVE ANALYSIS ---
+            doc.addPage();
+            doc.setPage(2); // Helper? No need, addPage switches focus.
+            // Switch to Landscape ONLY if possible? mix-mode is hard in jsPDF. stay Portrait?
+            // If SWOT table is wide, Portrait might be tight. But standard paper is fine usually.
+
+            yPos = 20;
+            doc.setFontSize(20);
+            doc.setTextColor(0, 150, 136);
+            doc.text(`Competitive SWOT Analysis: ${company}`, 14, yPos);
+            yPos += 20;
+
+            // 2.1 SWOT TABLE
+            if (swotTable.length > 0) {
+                const headers = Object.keys(swotTable[0]).map(h => h.toUpperCase());
+                const body = swotTable.map((row: any) => Object.values(row) as string[]);
+
+                autoTable(doc, {
+                    startY: yPos,
+                    head: [headers],
+                    body: body,
+                    theme: 'grid',
+                    headStyles: { fillColor: [0, 150, 136] },
+                    styles: { cellWidth: 'auto', overflow: 'linebreak' },
+                    margin: { left: 14 }
+                });
+                yPos = (doc as any).lastAutoTable.finalY + 15;
+            }
+
+            // 2.2 Market Position
+            if (comparison.market_position_summary) {
+                // Check space
+                if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+                doc.setFontSize(14);
+                doc.setTextColor(0);
+                doc.text("Market Position Summary", 14, yPos);
+                yPos += 7;
+                doc.setFontSize(11);
+                doc.setTextColor(60);
+                const lines = doc.splitTextToSize(comparison.market_position_summary, pageWidth - 28);
+                doc.text(lines, 14, yPos);
+            }
+
+            doc.save(`${company}_FULL_Report.pdf`);
+        }
     };
 
     return (
@@ -147,13 +251,41 @@ const ComparisonPage: React.FC = () => {
 
             {/* TITLE & ACTIONS BAR */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, mb: 4 }}>
-                <Box>
-                    <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: -1 }}>
-                        {company}
-                    </Typography>
-                    <Typography variant="subtitle1" color="text.secondary" sx={{ mt: 0.5, fontWeight: 500 }}>
-                        Competitive SWOT Analysis
-                    </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {/* COMPANY LOGO with Fallback */}
+                    <Box
+                        component="img"
+                        src={
+                            apiResponse?.logo ||
+                            `https://logo.clearbit.com/${apiResponse?.scraped_sources?.[0]?.title ||
+                            company.replace(/\s+/g, '').toLowerCase() + '.com'}`
+                        }
+                        onError={(e: any) => {
+                            e.target.onerror = null; // Prevent loop
+                            // Fallback to Google Favicon API
+                            if (e.target.src.includes('clearbit')) {
+                                e.target.src = `https://www.google.com/s2/favicons?domain=${company}&sz=128`;
+                            } else {
+                                // Final Fallback to Initials
+                                e.target.src = `https://ui-avatars.com/api/?name=${company}&background=0A66C2&color=fff&size=128&font-size=0.5`;
+                            }
+                        }}
+                        sx={{
+                            width: 64, height: 64, borderRadius: 2,
+                            objectFit: 'contain',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            bgcolor: 'white',
+                            p: 1
+                        }}
+                    />
+                    <Box>
+                        <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: -1 }}>
+                            {company}
+                        </Typography>
+                        <Typography variant="subtitle1" color="text.secondary" sx={{ mt: 0, fontWeight: 500 }}>
+                            Competitive SWOT Analysis
+                        </Typography>
+                    </Box>
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 2 }}>
@@ -193,7 +325,11 @@ const ComparisonPage: React.FC = () => {
                     >
                         <MenuItem onClick={() => handleDownload('PDF')}>
                             <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
-                            <ListItemText>Download PDF</ListItemText>
+                            <ListItemText>Download SWOT PDF</ListItemText>
+                        </MenuItem>
+                        <MenuItem onClick={() => handleDownload('MERGED')}>
+                            <ListItemIcon><PictureAsPdfIcon fontSize="small" color="secondary" /></ListItemIcon>
+                            <ListItemText primary="Download Full Report" secondary="Market Analysis + SWOT" />
                         </MenuItem>
                     </Menu>
                 </Box>

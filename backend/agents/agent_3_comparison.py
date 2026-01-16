@@ -24,7 +24,7 @@ def compare_companies(primary_company, primary_data, competitor_data_list):
         primary_data (dict): Validated data of primary company (from Agent 2)
         competitor_data_list (list): List of dicts, each containing 'name' and 'raw_text' or 'validated_data' for competitors.
     """
-    print(f"⚖️ Agent 3: Comparing {primary_company} against {len(competitor_data_list)} competitors...")
+    print(f"Agent 3: Comparing {primary_company} against {len(competitor_data_list)} competitors...")
 
     # Prepare context
     competitor_context = ""
@@ -78,5 +78,5 @@ def compare_companies(primary_company, primary_data, competitor_data_list):
         return json.loads(response.choices[0].message.content)
 
     except Exception as e:
-        print(f"❌ Agent 3 Error: {e}")
+        print(f"Agent 3 Error: {e}")
         return {"error": str(e)}

@@ -13,7 +13,7 @@ deployment = os.getenv("AZURE_DEPLOYMENT_NAME")
 
 # Check keys
 if not api_key or not endpoint:
-    print("❌ ERROR: Azure credentials not found in .env file!")
+    print("ERROR: Azure credentials not found in .env file!")
 
 # 3. Initialize Client
 client = AzureOpenAI(

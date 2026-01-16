@@ -43,7 +43,8 @@ class CompanyResearchView(APIView):
                 
                 # Check success
                 if not agent_1_response or agent_1_response.get("status") != "success":
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Agent 1 failed (No data found).'})}\n\n"
+                    error_msg = agent_1_response.get('message', 'Agent 1 failed (No data found).') if agent_1_response else 'Agent 1 failed (No response).'
+                    yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
                     return
 
                 # ====================================================
@@ -127,17 +128,30 @@ class CompanyResearchView(APIView):
                 # ====================================================
                 yield f"data: {json.dumps({'type': 'log', 'message': 'Report generation complete. Finalizing...'})}\n\n"
 
+                # Prepare detailed sources for frontend (with URLs)
+                sources_formatted = []
+                if agent_1_response and "data" in agent_1_response:
+                    seen_urls = set()
+                    for item in agent_1_response["data"]:
+                        if item["source_url"] not in seen_urls:
+                            sources_formatted.append({
+                                "title": item["source_domain"],
+                                "url": item["source_url"]
+                            })
+                            seen_urls.add(item["source_url"])
+
                 final_payload = {
                     "status": "success",
                     "company": company_name,
-                    "scraped_sources": scraped_sites_list, 
-                    "total_sources": len(scraped_sites_list),
+                    "scraped_sources": sources_formatted, 
+                    "total_sources": len(sources_formatted),
                     "final_answer": final_insight,
-                    "comparison": comparison_result
+                    "comparison": comparison_result,
+                    "logo": agent_1_response.get("logo")
                 }
                 # Send as a special 'complete' event
                 yield f"data: {json.dumps({'type': 'complete', 'payload': final_payload})}\n\n"
-
+            
             except Exception as outer_e:
                 import traceback
                 print(f"CRITICAL STREAM ERROR: {traceback.format_exc()}")
