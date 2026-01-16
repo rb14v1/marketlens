@@ -127,6 +127,12 @@ const InputPage: React.FC = () => {
                 }
             }
 
+            // CHECK: Did we finish successfully?
+            if (loadingStage !== 'success') {
+                // Check if we probably have a silent failure
+                throw new Error("Stream connection checked out early. Agent stopped unexpectedly.");
+            }
+
         } catch (err: any) {
             console.error("API Error:", err);
             setError(err.message || "Something went wrong.");
@@ -288,8 +294,8 @@ const InputPage: React.FC = () => {
                                                 <TextField
                                                     fullWidth
                                                     size="small"
-                                                    label="Competitors (comma separated)"
-                                                    placeholder="e.g. Microsoft, Amazon"
+                                                    label="Competitors (Optional)"
+                                                    placeholder="Leave empty to auto-detect top competitors"
                                                     value={competitors}
                                                     onChange={(e) => setCompetitors(e.target.value)}
                                                 />

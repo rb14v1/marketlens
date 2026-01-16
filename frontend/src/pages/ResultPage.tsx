@@ -287,9 +287,42 @@ const ResultPage: React.FC = () => {
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, mb: 4 }}>
-                <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: -1 }}>
-                    {company}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {/* COMPANY LOGO with Fallback */}
+                    <Box
+                        component="img"
+                        src={`https://logo.clearbit.com/${apiResponse?.scraped_sources?.[0] ||
+                            company.replace(/\s+/g, '').toLowerCase() + '.com'
+                            }`}
+                        onError={(e: any) => {
+                            e.target.onerror = null; // Prevent loop
+                            // Fallback to Google Favicon API
+                            if (e.target.src.includes('clearbit')) {
+                                e.target.src = `https://www.google.com/s2/favicons?domain=${company}&sz=128`;
+                            } else {
+                                // Final Fallback to Initials
+                                e.target.src = `https://ui-avatars.com/api/?name=${company}&background=0A66C2&color=fff&size=128&font-size=0.5`;
+                            }
+                        }}
+                        sx={{
+                            width: 72, height: 72, borderRadius: 3,
+                            objectFit: 'contain',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            bgcolor: 'white',
+                            p: 1
+                        }}
+                    />
+                    <Box>
+                        <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: -1, lineHeight: 1 }}>
+                            {company}
+                        </Typography>
+                        {apiResponse?.scraped_sources?.[0] && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                                Source: {apiResponse.scraped_sources[0]}
+                            </Typography>
+                        )}
+                    </Box>
+                </Box>
 
                 <Box sx={{ display: 'flex', gap: 2 }}>
 
