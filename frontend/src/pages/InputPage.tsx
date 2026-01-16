@@ -3,61 +3,69 @@ import { Box, Button, Typography, Container, Paper, TextField, Alert, Fade, Zoom
 import { useNavigate } from 'react-router-dom';
 import PublicIcon from '@mui/icons-material/Public'; // Agent 1 Icon
 import PsychologyIcon from '@mui/icons-material/Psychology'; // Agent 2 Icon
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows'; // Agent 3 Icon
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // Success Icon
 
 const InputPage: React.FC = () => {
     const [companyName, setCompanyName] = useState('');
     const [dataRequirements, setDataRequirements] = useState('');
-    const [loadingStage, setLoadingStage] = useState<'idle' | 'agent1' | 'agent2' | 'success'>('idle');
+    const [loadingStage, setLoadingStage] = useState<'idle' | 'agent1' | 'agent2' | 'agent3' | 'success'>('idle');
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
     // Timers ref to clear them if component unmounts or request finishes early
     const transitionTimer = useRef<NodeJS.Timeout | null>(null);
 
+    const [enableComparison, setEnableComparison] = useState(false);
+    const [competitors, setCompetitors] = useState('');
+
     const handleSubmit = async () => {
         setLoadingStage('agent1'); // Start Animation
         setError(null);
 
-        // 1. UX HACK: Automatically switch to "Agent 2" visual after 4 seconds (Previously 12s)
-        // This makes the user feel progress while waiting for the single backend response.
-        transitionTimer.current = setTimeout(() => {
-            setLoadingStage((prev) => (prev === 'agent1' ? 'agent2' : prev));
-        }, 4000);
+        // Start the API Request but don't await it yet
+        const apiCallPromise = fetch('http://localhost:8000/api/research/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                company_name: companyName,
+                requirements: dataRequirements,
+                enable_comparison: enableComparison,
+                competitor_names: competitors
+            }),
+        }).then(async (response) => {
+            if (!response.ok) throw new Error('Failed to connect to the Agent. Is Django running?');
+            const data = await response.json();
+            if (data.status === 'error') throw new Error(data.message || 'Agent failed to retrieve data');
+            return data;
+        });
 
         try {
             // ---------------------------------------------------------
-            // REAL BACKEND CALL
+            // GUARANTEED ANIMATION SEQUENCE
             // ---------------------------------------------------------
-            const response = await fetch('http://54.210.254.63:8000/api/research/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    company_name: companyName,
-                    requirements: dataRequirements
-                }),
-            });
+            // 1. Agent 1 (Min 2.5s)
+            await new Promise(r => setTimeout(r, 2500));
 
-            if (!response.ok) {
-                throw new Error('Failed to connect to the Agent. Is Django running?');
+            // 2. Agent 2
+            setLoadingStage('agent2');
+            await new Promise(r => setTimeout(r, 2500));
+
+            // 3. Agent 3 (Optional)
+            if (enableComparison) {
+                setLoadingStage('agent3');
+                await new Promise(r => setTimeout(r, 2500));
             }
 
-            const data = await response.json();
-
-            if (data.status === 'error') {
-                throw new Error(data.message || 'Agent failed to retrieve data');
-            }
+            // 4. Wait for real data if it's not ready yet
+            const data = await apiCallPromise;
 
             // ---------------------------------------------------------
-            // SUCCESS: DATA RECEIVED
+            // SUCCESS
             // ---------------------------------------------------------
-            // Clear the "Agent 2" timer if it hasn't fired yet
-            if (transitionTimer.current) clearTimeout(transitionTimer.current);
-
-            // Show Success Animation
             setLoadingStage('success');
 
-            // Wait 1.5s for user to see the "Success" checkmark, then navigate
+            // Wait 1.5s for success checkmark
             setTimeout(() => {
                 navigate('/results', {
                     state: {
@@ -70,8 +78,7 @@ const InputPage: React.FC = () => {
         } catch (err: any) {
             console.error("API Error:", err);
             setError(err.message || "Something went wrong.");
-            setLoadingStage('idle'); // Reset UI on error
-            if (transitionTimer.current) clearTimeout(transitionTimer.current);
+            setLoadingStage('idle');
         }
     };
 
@@ -189,8 +196,22 @@ const InputPage: React.FC = () => {
                                         icon={PsychologyIcon}
                                         label="Agent 2: AI Analyst"
                                         active={loadingStage === 'agent2'}
-                                        completed={loadingStage === 'success'}
+                                        completed={loadingStage === 'agent3' || loadingStage === 'success'}
                                     />
+
+                                    {/* Connector Line 2 (Only if Comparison Enabled) */}
+                                    {enableComparison && (
+                                        <>
+                                            <Box sx={{ width: 60, height: 4, bgcolor: loadingStage === 'agent3' || loadingStage === 'success' ? '#4caf50' : 'grey.200', transition: 'all 1s ease' }} />
+                                            {/* AGENT 3: COMPARATOR */}
+                                            <StatusCircle
+                                                icon={CompareArrowsIcon}
+                                                label="Agent 3: Comparator"
+                                                active={loadingStage === 'agent3'}
+                                                completed={loadingStage === 'success'}
+                                            />
+                                        </>
+                                    )}
                                 </Box>
 
                                 {/* LOGGING WINDOW - SINGLE LINE UPDATE */}
@@ -252,13 +273,43 @@ const InputPage: React.FC = () => {
                                     />
                                 </Box>
 
-                                <Box sx={{ mb: 4 }}>
-                                    <TextField
-                                        fullWidth label="Data Requirements"
-                                        value={dataRequirements} onChange={(e) => setDataRequirements(e.target.value)}
-                                        placeholder="e.g. Who is the CEO and what is their email address?"
-                                        multiline rows={4} variant="outlined" InputLabelProps={{ shrink: true }}
-                                    />
+                                <TextField
+                                    fullWidth label="Data Requirements"
+                                    value={dataRequirements} onChange={(e) => setDataRequirements(e.target.value)}
+                                    placeholder="e.g. Who is the CEO and what is their email address?"
+                                    multiline rows={4} variant="outlined" InputLabelProps={{ shrink: true }}
+                                />
+
+
+                                {/* COMPARISON TOGGLE - MOVED UP */}
+                                <Box sx={{ mt: 4, mb: 3, p: 2, bgcolor: '#f9fafb', borderRadius: 2, border: '1px solid #eee' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                        <input
+                                            type="checkbox"
+                                            id="enableComp"
+                                            checked={enableComparison}
+                                            onChange={(e) => setEnableComparison(e.target.checked)}
+                                            style={{ width: 18, height: 18, marginRight: 10, cursor: 'pointer' }}
+                                        />
+                                        <label htmlFor="enableComp" style={{ cursor: 'pointer', fontWeight: 600, color: '#333' }}>
+                                            Enable Company Comparison
+                                        </label>
+                                    </Box>
+
+                                    {enableComparison && (
+                                        <Fade in={true}>
+                                            <Box sx={{ mt: 2 }}>
+                                                <TextField
+                                                    fullWidth
+                                                    size="small"
+                                                    label="Competitors (comma separated)"
+                                                    placeholder="e.g. Microsoft, Amazon"
+                                                    value={competitors}
+                                                    onChange={(e) => setCompetitors(e.target.value)}
+                                                />
+                                            </Box>
+                                        </Fade>
+                                    )}
                                 </Box>
 
                                 <Button
@@ -274,7 +325,7 @@ const InputPage: React.FC = () => {
                     )}
                 </Paper>
             </Box>
-        </Container>
+        </Container >
     );
 };
 

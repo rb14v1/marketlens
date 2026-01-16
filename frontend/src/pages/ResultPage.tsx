@@ -5,7 +5,8 @@ import autoTable from 'jspdf-autotable';
 import {
     Box, Container, Typography, Card, CardContent, Grid, Button,
     Menu, MenuItem, ListItemIcon, Dialog, DialogTitle, DialogContent,
-    List, ListItem, ListItemText, Paper, TextField
+    List, ListItem, ListItemText, Paper, TextField,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import LinkIcon from '@mui/icons-material/Link';
@@ -44,7 +45,7 @@ const ResultPage: React.FC = () => {
     }
 
     // 2. DESTRUCTURE DATA
-    const { company, final_answer, scraped_sources } = apiResponse;
+    const { company, final_answer, scraped_sources, comparison } = apiResponse;
     const { summary, extracted_data } = final_answer || { summary: "Analysis failed or incomplete.", extracted_data: {} };
 
     // --- NEW HELPER FUNCTION ---
@@ -64,24 +65,48 @@ const ResultPage: React.FC = () => {
     const getInitialMetrics = () => {
         let initialMetrics: Record<string, string> = {};
         if (extracted_data) {
-            if (extracted_data.Key_Answer) {
-                if (isValidValue(extracted_data.Key_Answer) && typeof extracted_data.Key_Answer !== 'object') {
-                    initialMetrics["Answer"] = String(extracted_data.Key_Answer);
-                } else if (typeof extracted_data.Key_Answer === 'object') {
-                    Object.entries(extracted_data.Key_Answer).forEach(([k, v]) => {
-                        if ((typeof v === 'string' || typeof v === 'number') && isValidValue(v)) {
-                            initialMetrics[k] = String(v);
-                        }
-                    });
-                }
-            }
-            if (Object.keys(initialMetrics).length === 0) {
-                Object.entries(extracted_data).forEach(([k, v]) => {
-                    if (k !== 'Details' && k !== 'Summary' && k !== 'Key_Answer' && typeof v === 'string' && v.length < 100 && isValidValue(v)) {
-                        initialMetrics[k] = v;
+            // Helper to process any value
+            const processValue = (val: any): string | null => {
+                if (Array.isArray(val)) return val.join(', ');
+                if (typeof val === 'string' || typeof val === 'number') return String(val);
+                return null;
+            };
+
+            // 1. Try Key_Answer if it's an object
+            if (extracted_data.Key_Answer && typeof extracted_data.Key_Answer === 'object' && !Array.isArray(extracted_data.Key_Answer)) {
+                Object.entries(extracted_data.Key_Answer).forEach(([k, v]) => {
+                    const strVal = processValue(v);
+                    if (strVal && isValidValue(strVal)) {
+                        initialMetrics[k] = strVal;
                     }
                 });
             }
+            // 2. Fallback: If Key_Answer is a direct string
+            else if (extracted_data.Key_Answer && isValidValue(extracted_data.Key_Answer) && (typeof extracted_data.Key_Answer === 'string' || typeof extracted_data.Key_Answer === 'number')) {
+                initialMetrics["Answer"] = String(extracted_data.Key_Answer);
+            }
+
+            // 3. Parse top-level extracted_data parsing for everything else
+            Object.entries(extracted_data).forEach(([k, v]) => {
+                // Skip internal keys or if we already found it in Key_Answer
+                if (k === 'Details' || k === 'Summary' || k === 'Key_Answer') return;
+                if (initialMetrics[k]) return; // Don't overwrite
+
+                const strVal = processValue(v);
+                // Only add if it's a short string (metric-like)
+                if (strVal && strVal.length < 200 && isValidValue(strVal)) {
+                    initialMetrics[k] = strVal;
+                }
+                // NEW: Handle nested objects (like "Alphabet_Inc": { ... })
+                else if (v && typeof v === 'object' && !Array.isArray(v)) {
+                    Object.entries(v).forEach(([subK, subV]) => {
+                        const subStrVal = processValue(subV);
+                        if (subStrVal && subStrVal.length < 200 && isValidValue(subStrVal)) {
+                            initialMetrics[subK] = subStrVal;
+                        }
+                    });
+                }
+            });
         }
         return initialMetrics;
     };
@@ -217,22 +242,52 @@ const ResultPage: React.FC = () => {
     return (
         <Container maxWidth="lg" sx={{ pb: 8, mt: 4 }}>
 
-            {/* TOP HEADER */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+            {/* TOP NAVIGATION HEADER */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, borderBottom: '1px solid #eee', pb: 2 }}>
+                {/* 1. BACK BUTTON */}
                 <Button
                     startIcon={<ArrowBackIcon />}
                     onClick={() => navigate('/')}
-                    sx={{ textTransform: 'none', color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
+                    sx={{ textTransform: 'none', color: 'text.secondary', fontWeight: 600, mr: 2 }}
                 >
-                    Back to Search
+                    Back
                 </Button>
-                <Typography variant="caption" color="primary.main" fontWeight={700} letterSpacing={1}>
-                    MARKET INTELLIGENCE REPORT
-                </Typography>
+
+                {/* 2. REPORT TABS */}
+                <Box sx={{ display: 'flex', gap: 1, bgcolor: '#f4f6f8', p: 0.5, borderRadius: 2 }}>
+                    <Button
+                        variant="contained"
+                        sx={{
+                            textTransform: 'none',
+                            fontWeight: 700,
+                            boxShadow: 'none',
+                            bgcolor: 'white',
+                            color: 'primary.main',
+                            '&:hover': { bgcolor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }
+                        }}
+                    >
+                        Market Intelligence Report
+                    </Button>
+
+                    {comparison && (
+                        <Button
+                            variant="text"
+                            onClick={() => navigate('/comparison', { state: { apiResponse } })}
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                color: 'text.secondary',
+                                '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' }
+                            }}
+                        >
+                            Competitive Report
+                        </Button>
+                    )}
+                </Box>
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, mb: 4 }}>
-                <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'lowercase' }}>
+                <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: -1 }}>
                     {company}
                 </Typography>
 
@@ -314,7 +369,7 @@ const ResultPage: React.FC = () => {
             {/* DYNAMIC CARDS GRID */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 {Object.entries(metrics).map(([key, value], index) => (
-                    <Grid item xs={12} md={4} key={index}>
+                    <Grid size={{ xs: 12, md: 4 }} key={index}>
                         <Card elevation={0} sx={{
                             height: '100%',
                             border: '1px solid #eee',
@@ -357,7 +412,7 @@ const ResultPage: React.FC = () => {
                 ))}
 
                 {Object.keys(metrics).length === 0 && (
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                         <Typography color="text.secondary" fontStyle="italic">
                             No specific metrics extracted. See summary below.
                         </Typography>

@@ -35,7 +35,7 @@ def validate_and_extract(user_requirement, raw_text_list):
         combined_text = combined_text[:30000]
 
     prompt = f"""
-    You are a Senior Data Analyst.
+    You are the Validation & Market Intelligence Agent (Agent 2).
     
     TASK: Answer the user requirement based on the provided scraped data.
     USER REQUIREMENT: "{user_requirement}"
@@ -46,16 +46,34 @@ def validate_and_extract(user_requirement, raw_text_list):
     INSTRUCTIONS:
     1. VALIDATE: Cross-reference the sources. Prioritize recent/official info.
     2. SUMMARIZE: Provide a clear, professional summary (2-3 sentences).
-    3. ANSWER: specific to the user's requirement. If the user asks for "CEO", just provide the name. If "Revenue", just the number.
+    3. ANSWER: specific to the user's requirement.
+    4. STRICT JSON Output. No Markdown. No Emojis.
     
     JSON FORMAT:
     {{
         "answer_found": true,
         "summary": "Professional summary of the findings.",
         "extracted_data": {{
-            "Key_Answer": "The direct answer to the user's question (e.g. Sundar Pichai)"
+            "Key_Answer": {{
+                 "Attribute_Name_1": "Value_1",
+                 "Attribute_Name_2": "Value_2"
+            }}
         }},
         "confidence_score": "High/Medium/Low"
+    }}
+    EXAMPLE:
+    User asks: "Who is the CEO and what are the competitors?"
+    Output:
+    {{
+        "answer_found": true,
+        "summary": "Microsoft is led by Satya Nadella...",
+        "extracted_data": {{
+            "Key_Answer": {{
+                "CEO": "Satya Nadella",
+                "Competitors": ["Google", "Amazon", "Apple"]
+            }}
+        }},
+        "confidence_score": "High"
     }}
     """
 

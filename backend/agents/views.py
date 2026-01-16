@@ -61,11 +61,44 @@ class CompanyResearchView(APIView):
         
         # Pass the list of text strings to the AI
         final_insight = validate_and_extract(requirements, raw_texts_for_ai)
-        
+
+        # ====================================================
+        # PHASE 4: Agent 3 (Competitive Comparison - OPTIONAL)
+        # ====================================================
+        enable_comparison = request.data.get('enable_comparison', False)
+        competitor_names_str = request.data.get('competitor_names', "")
+        comparison_result = None
+
+        if enable_comparison and competitor_names_str:
+            competitors = [c.strip() for c in competitor_names_str.split(',') if c.strip()]
+            competitor_data_list = []
+            
+            from .agent_3_comparison import compare_companies # Lazy import
+
+            print(f"⚖️ Agent 3 Triggered: Comparing against {competitors}...")
+
+            for comp in competitors:
+                print(f"   🔎 Agent 1 (Re-tasked): Searching for competitor '{comp}'...")
+                # Reuse Agent 1 to get competitor data
+                comp_response = fetch_roc_data(comp, requirements) # We use same requirements
+                
+                if comp_response.get("status") == "success":
+                    # Extract raw text from the best source found for this competitor
+                    # For simplicity in this agent system, we take the top 2-3 sources text
+                    comp_raw_texts = [entry['raw_text'] for entry in comp_response.get("data", [])[:3]]
+                    competitor_data_list.append({
+                        "name": comp,
+                        "data": "\n".join(comp_raw_texts)
+                    })
+            
+            if competitor_data_list:
+                comparison_result = compare_companies(company_name, final_insight, competitor_data_list)
+
         return Response({
             "status": "success",
             "company": company_name,
-            "scraped_sources": scraped_sites_list, # <--- NEW: List of websites for UI
+            "scraped_sources": scraped_sites_list, 
             "total_sources": len(scraped_sites_list),
-            "final_answer": final_insight  # <--- Clean, validated JSON
+            "final_answer": final_insight,
+            "comparison": comparison_result # <--- NEW: Comparison Data
         })

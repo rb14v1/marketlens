@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Box } from '@mui/material';
 import InputPage from './pages/InputPage';
 import ResultPage from './pages/ResultPage';
+import ComparisonPage from './pages/ComparisonPage';
 import Footer from './components/Footer';
 import Header from './components/Header';
 
@@ -15,6 +16,7 @@ function App() {
           <Routes>
             <Route path="/" element={<InputPage />} />
             <Route path="/results" element={<ResultPage />} />
+            <Route path="/comparison" element={<ComparisonPage />} />
           </Routes>
         </Box>
         <Footer />
