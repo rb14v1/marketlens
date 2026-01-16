@@ -25,13 +25,16 @@ client = AzureOpenAI(
 def validate_and_extract(user_requirement, raw_text_list):
     """
     Agent 2 (Azure): Safe for large data.
+    Generates:
+    - {"type": "log", "message": "..."}
+    - {"type": "result", "payload": {...}}
     """
-    print(f"🤖 Agent 2 (Azure): Analyzing {len(raw_text_list)} sources...")
+    yield {"type": "log", "message": f"🤖 Agent 2 (Azure): Analyzing {len(raw_text_list)} sources..."}
     
-    # SAFEGUARD: Limit total text to 30,000 chars to avoid Azure errors
+    # SAFEGUARD: Limit total text to 30,000 chars
     combined_text = "\n--- NEW SOURCE ---\n".join(raw_text_list)
     if len(combined_text) > 30000:
-        print("   ⚠️ Text too long! Truncating to safe limit...")
+        yield {"type": "log", "message": "   ⚠️ Text too long! Truncating to safe limit..."}
         combined_text = combined_text[:30000]
 
     prompt = f"""
@@ -87,8 +90,9 @@ def validate_and_extract(user_requirement, raw_text_list):
             temperature=0,
             response_format={"type": "json_object"}
         )
-        return json.loads(response.choices[0].message.content)
+        result = json.loads(response.choices[0].message.content)
+        yield {"type": "result", "payload": result}
 
     except Exception as e:
-        print(f"❌ Azure Error: {e}")
-        return {"answer_found": False, "error": str(e)}
+        yield {"type": "log", "message": f"❌ Azure Error: {e}"}
+        yield {"type": "result", "payload": {"answer_found": False, "error": str(e)}}

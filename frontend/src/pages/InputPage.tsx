@@ -19,68 +19,7 @@ const InputPage: React.FC = () => {
     const [enableComparison, setEnableComparison] = useState(false);
     const [competitors, setCompetitors] = useState('');
 
-    const handleSubmit = async () => {
-        setLoadingStage('agent1'); // Start Animation
-        setError(null);
 
-        // Start the API Request but don't await it yet
-        const apiCallPromise = fetch('http://localhost:8000/api/research/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                company_name: companyName,
-                requirements: dataRequirements,
-                enable_comparison: enableComparison,
-                competitor_names: competitors
-            }),
-        }).then(async (response) => {
-            if (!response.ok) throw new Error('Failed to connect to the Agent. Is Django running?');
-            const data = await response.json();
-            if (data.status === 'error') throw new Error(data.message || 'Agent failed to retrieve data');
-            return data;
-        });
-
-        try {
-            // ---------------------------------------------------------
-            // GUARANTEED ANIMATION SEQUENCE
-            // ---------------------------------------------------------
-            // 1. Agent 1 (Min 2.5s)
-            await new Promise(r => setTimeout(r, 2500));
-
-            // 2. Agent 2
-            setLoadingStage('agent2');
-            await new Promise(r => setTimeout(r, 2500));
-
-            // 3. Agent 3 (Optional)
-            if (enableComparison) {
-                setLoadingStage('agent3');
-                await new Promise(r => setTimeout(r, 2500));
-            }
-
-            // 4. Wait for real data if it's not ready yet
-            const data = await apiCallPromise;
-
-            // ---------------------------------------------------------
-            // SUCCESS
-            // ---------------------------------------------------------
-            setLoadingStage('success');
-
-            // Wait 1.5s for success checkmark
-            setTimeout(() => {
-                navigate('/results', {
-                    state: {
-                        apiResponse: data,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }, 1500);
-
-        } catch (err: any) {
-            console.error("API Error:", err);
-            setError(err.message || "Something went wrong.");
-            setLoadingStage('idle');
-        }
-    };
 
     // Helper component for the animated circles
     const StatusCircle = ({ active, completed, icon: Icon, label }: any) => (
@@ -112,42 +51,88 @@ const InputPage: React.FC = () => {
 
     // --- LOGGING STATES ---
     const [logs, setLogs] = useState<string[]>([]);
-    const [currentLogStep, setCurrentLogStep] = useState(0);
 
-    const logMessages = [
-        "Initializing Agent 1 (Web Scraper)...",
-        `Analyzing search intent for "${companyName}"...`,
-        "Identifying high-authority data sources...",
-        "Web Scraper engaged. Attempting to fetch company profile...",
-        "Parsing HTML content from identified urls...",
-        "Agent 1 task complete. Handing off to Agent 2...",
-        "Initializing Agent 2 (AI Analyst)...",
-        "Synthesizing extracted data...",
-        "Cross-referencing metrics (Revenue, CEO, HQ)...",
-        "Generating Executive Summary...",
-        "Final validation of report data...",
-        "Report ready."
-    ];
-
-    // Effect to simulate logs
+    // Auto-scroll to bottom of logs
+    const logsEndRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
-        if (loadingStage !== 'idle' && loadingStage !== 'success') {
-            const interval = setInterval(() => {
-                setCurrentLogStep(prev => {
-                    if (prev < logMessages.length - 1) {
-                        // Add next log
-                        setLogs(old => [...old, logMessages[prev]]);
-                        return prev + 1;
+        logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [logs]);
+
+    const handleSubmit = async () => {
+        setLoadingStage('agent1');
+        setError(null);
+        setLogs([]);
+
+        try {
+            const response = await fetch('http://localhost:8000/api/research/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    company_name: companyName,
+                    requirements: dataRequirements,
+                    enable_comparison: enableComparison,
+                    competitor_names: competitors
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to connect to the Agent.');
+            if (!response.body) throw new Error('No response body received.');
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                // Split by double newline (SSE standard separator)
+                const events = chunk.split('\n\n');
+
+                for (const eventStr of events) {
+                    if (!eventStr.trim().startsWith('data: ')) continue;
+
+                    try {
+                        const jsonStr = eventStr.replace('data: ', '').trim();
+                        if (!jsonStr) continue;
+
+                        const event = JSON.parse(jsonStr);
+
+                        if (event.type === 'log') {
+                            setLogs(prev => [...prev, event.message]);
+                            // Update stage based on message keywords (Simple heuristics)
+                            if (event.message.includes("Agent 2")) setLoadingStage('agent2');
+                            if (event.message.includes("Agent 3")) setLoadingStage('agent3');
+                        }
+                        else if (event.type === 'complete') {
+                            setLoadingStage('success');
+                            // Delay navigation slightly to show success
+                            setTimeout(() => {
+                                navigate('/results', {
+                                    state: {
+                                        apiResponse: event.payload,
+                                        timestamp: new Date().toISOString()
+                                    }
+                                });
+                            }, 1000);
+                            return; // Stop processing
+                        }
+                        else if (event.type === 'error') {
+                            throw new Error(event.message);
+                        }
+
+                    } catch (e) {
+                        console.warn("Error parsing stream event:", e);
                     }
-                    return prev;
-                });
-            }, 800); // New log every 800ms
-            return () => clearInterval(interval);
-        } else if (loadingStage === 'idle') {
-            setLogs([]);
-            setCurrentLogStep(0);
+                }
+            }
+
+        } catch (err: any) {
+            console.error("API Error:", err);
+            setError(err.message || "Something went wrong.");
+            setLoadingStage('idle');
         }
-    }, [loadingStage, companyName]);
+    };
 
     return (
         <Container maxWidth="sm">
@@ -222,7 +207,8 @@ const InputPage: React.FC = () => {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     textAlign: 'center',
-                                    mt: 2
+                                    mt: 2,
+                                    px: 2
                                 }}>
                                     {loadingStage === 'success' ? (
                                         <Typography color="success.main" fontWeight={700} variant="h6">
@@ -230,16 +216,16 @@ const InputPage: React.FC = () => {
                                         </Typography>
                                     ) : (
                                         <Typography
-                                            key={currentLogStep} // Key change triggers animation restart
+                                            key={logs.length} // Key change triggers animation restart
                                             color="primary.main"
                                             fontWeight={600}
                                             sx={{
                                                 animation: 'fadeIn 0.5s ease-in-out',
-                                                fontSize: '1.2rem',
+                                                fontSize: '1.1rem',
                                                 textShadow: '0px 0px 1px rgba(0,0,0,0.1)'
                                             }}
                                         >
-                                            {logMessages[currentLogStep]}
+                                            {logs.length > 0 ? logs[logs.length - 1] : "Initializing..."}
                                         </Typography>
                                     )}
                                 </Box>

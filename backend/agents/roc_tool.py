@@ -7,14 +7,15 @@ import trafilatura  # Ensure you have 'pip install trafilatura'
 def fetch_roc_data(company_name, user_requirements):
     """
     Agent 1 (Deep Scraper - Scalable Version): 
-    1. Searches for links.
-    2. VISITS up to 10 top links.
-    3. Returns data + list of sources.
+    Generates events:
+    - {"type": "log", "message": "..."}
+    - {"type": "result", "payload": {...}}
     """
-    print(f"🔎 Agent 1: Deep searching for {company_name} | Need: {user_requirements}...")
+    yield {"type": "log", "message": f"🔎 Agent 1: Deep searching for {company_name} | Need: {user_requirements}..."}
     
     # 1. Construct Query
-    search_query = f"{company_name} {user_requirements} list text"
+    clean_requirements = user_requirements.replace('\n', ' ').strip()
+    search_query = f'"{company_name}" {clean_requirements} data'
     
     url = "https://html.duckduckgo.com/html/"
     headers = {
@@ -23,18 +24,19 @@ def fetch_roc_data(company_name, user_requirements):
     data = {'q': search_query}
     
     collected_data = []
-    visited_sources_list = [] # <--- NEW: Track domains for UI
+    visited_sources_list = []
 
     try:
         # --- PHASE 1: SEARCH ---
         response = requests.post(url, data=data, headers=headers)
         if response.status_code != 200:
-            return {"status": "error", "message": "Search blocked"}
+            yield {"type": "result", "payload": {"status": "error", "message": "Search blocked"}}
+            return
 
         soup = BeautifulSoup(response.text, 'html.parser')
         results = soup.find_all('div', class_='result')
         
-        # --- PHASE 2: VISIT & SCRAPE (Limit increased to 10) ---
+        # --- PHASE 2: VISIT & SCRAPE ---
         target_count = 10 
         success_count = 0
         
@@ -47,21 +49,16 @@ def fetch_roc_data(company_name, user_requirements):
             target_url = link_tag.get('href')
             domain = urlparse(target_url).netloc
             
-            # Skip noise
             if "facebook.com" in domain or "instagram.com" in domain:
                 continue
 
-            print(f"   👉 Visiting: {domain}...")
+            yield {"type": "log", "message": f"👉 Visiting: {domain}..."}
             
             try:
-                # 1. Download the Full Page
                 downloaded = trafilatura.fetch_url(target_url)
-                
-                # 2. Extract the Main Text
+                full_text = None
                 if downloaded:
                     full_text = trafilatura.extract(downloaded)
-                else:
-                    full_text = None
 
                 if full_text and len(full_text) > 100:
                     collected_data.append({
@@ -69,21 +66,21 @@ def fetch_roc_data(company_name, user_requirements):
                         "source_url": target_url,
                         "raw_text": full_text
                     })
-                    visited_sources_list.append(domain) # Add to clean list
+                    visited_sources_list.append(domain)
                     success_count += 1
                 else:
-                    print(f"      ⚠️ Skipped {domain} (No readable text)")
+                    yield {"type": "log", "message": f"   ⚠️ Skipped {domain} (No readable text)"}
 
             except Exception as e:
-                print(f"      ❌ Error visiting {domain}")
+                yield {"type": "log", "message": f"   ❌ Error visiting {domain}"}
                 continue
 
-        return {
+        yield {"type": "result", "payload": {
             "status": "success",
             "company_name": company_name,
             "data": collected_data,
-            "source_list": visited_sources_list # <--- Returns list for UI
-        }
+            "source_list": visited_sources_list
+        }}
 
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        yield {"type": "result", "payload": {"status": "error", "message": str(e)}}
