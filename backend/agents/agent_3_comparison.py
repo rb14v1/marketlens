@@ -3,71 +3,69 @@ import json
 from openai import AzureOpenAI
 from dotenv import load_dotenv
 
-# Load params
 load_dotenv()
-endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-api_key = os.getenv("AZURE_OPENAI_API_KEY")
-deployment = os.getenv("AZURE_DEPLOYMENT_NAME")
-
 client = AzureOpenAI(
-    azure_endpoint=endpoint,
-    api_key=api_key,
+    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     api_version="2024-02-15-preview"
 )
 
 def compare_companies(primary_company, primary_data, competitor_data_list):
     """
-    Agent 3: Competitive Comparison Agent.
-    
-    Args:
-        primary_company (str): Name of primary company
-        primary_data (dict): Validated data of primary company (from Agent 2)
-        competitor_data_list (list): List of dicts, each containing 'name' and 'raw_text' or 'validated_data' for competitors.
+    Agent 3: Competitive Comparison.
+    Dynamically builds the table structure to ensure ALL competitors are included.
     """
     print(f"Agent 3: Comparing {primary_company} against {len(competitor_data_list)} competitors...")
 
-    # Prepare context
+    # 1. Prepare Data Context
     competitor_context = ""
+    competitor_names = []
+    
     for comp in competitor_data_list:
-        competitor_context += f"\n--- COMPETITOR: {comp['name']} ---\n{comp.get('data', 'No data available')}\n"
+        name = comp['name']
+        competitor_names.append(name)
+        competitor_context += f"\n<<< DATA FOR COMPETITOR: {name} >>>\n{comp.get('data', 'No data available')}\n"
+
+    # 2. 🟢 DYNAMIC JSON EXAMPLE GENERATOR
+    # This forces the AI to output columns for exactly the competitors we found.
+    example_row = f'{{ "category": "Strengths", "{primary_company}": "• Item 1", '
+    for name in competitor_names:
+        example_row += f'"{name}": "• Strength A", '
+    example_row = example_row.rstrip(", ") + " }"
 
     prompt = f"""
-    You are the Competitive Comparison Agent (Agent 3).
+    You are a Senior Market Strategy Consultant (Agent 3).
     
-    TASK: Compare '{primary_company}' against the following competitors based on the provided data.
+    TASK: Perform a SWOT comparison between {primary_company} and its competitors: {", ".join(competitor_names)}.
     
-    PRIMARY COMPANY DATA:
+    CRITICAL RULES:
+    1. **NO CONTAMINATION**: When filling a competitor's column, ONLY use data from that competitor's section below. Do NOT copy {primary_company}'s data.
+    2. **ALL COLUMNS**: The output table MUST have a column for "{primary_company}" and columns for: {", ".join(competitor_names)}.
+    3. **STRICT SWOT**: Generate exactly 4 rows: "Strengths", "Weaknesses", "Opportunities", "Threats".
+    4. **FORMAT**: Use bullet points (•). Keep them concise.
+    5. **MISSING DATA**: If data is missing for a specific cell, write "N/A".
+    
+    PRIMARY COMPANY DATA ({primary_company}):
     {json.dumps(primary_data, indent=2)}
     
-    COMPETITOR DATA:
+    COMPETITOR RAW DATA:
     {competitor_context}
     
-    STRICT INSTRUCTIONS:
-    1. **TASK**: Create a Side-by-Side SWOT Analysis Table.
-    2. **TABLE STRUCTURE**:
-       - The 'swot_table' MUST contain exactly 4 rows: "Strengths", "Weaknesses", "Opportunities", "Threats".
-       - Columns must be: "category" (Row Name), "{primary_company}" (Primary Data), and one column for EACH competitor (e.g., "Competitor 1", "Competitor 2").
-    3. **CONTENT**:
-       - For each cell, provide a concise bulleted list (as a string) of the top 3 items.
-       - E.g., "• Strong Brand\n• Global Reach\n• High R&D"
-    4. **FORBIDDEN**: Do NOT include financial metrics like Revenue or Employee count in this table. This is purely qualitative SWOT.
-    5. JSON Output ONLY. No Markdown.
-    
-    OUTPUT JSON FORMAT:
+    OUTPUT JSON FORMAT (Strictly follow this structure):
     {{
         "swot_table": [
-            {{ "category": "Strengths", "{primary_company}": "• Item 1\n• Item 2", "Competitor_Name": "• Item A\n• Item B" }},
-            {{ "category": "Weaknesses", "{primary_company}": "• Item 1", "Competitor_Name": "• Item A" }},
-            {{ "category": "Opportunities", "{primary_company}": "• Item 1", "Competitor_Name": "• Item A" }},
-            {{ "category": "Threats", "{primary_company}": "• Item 1", "Competitor_Name": "• Item A" }}
+            {example_row},
+            {{ "category": "Weaknesses", ... (same columns) }},
+            {{ "category": "Opportunities", ... (same columns) }},
+            {{ "category": "Threats", ... (same columns) }}
         ],
-        "market_position_summary": "Brief narrative summary of the competitive landscape."
+        "market_position_summary": "A 2-sentence summary comparing these companies."
     }}
     """
 
     try:
         response = client.chat.completions.create(
-            model=deployment,
+            model=os.getenv("AZURE_DEPLOYMENT_NAME"),
             messages=[
                 {"role": "system", "content": "You are a helpful API that outputs only JSON."},
                 {"role": "user", "content": prompt}

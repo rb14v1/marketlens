@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-    Container, Box, Typography, Button,
+    Container, Box, Typography, Button, Avatar,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     List, ListItem, ListItemIcon, ListItemText, Paper, TextField,
     Dialog, DialogTitle, DialogContent, Menu, MenuItem
@@ -16,12 +16,16 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Fix for autoTable typescript error if it occurs
+const autoTableAny = autoTable as any;
+
 const ComparisonPage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    // EXTRACT FROM apiResponse (passed from ResultPage)
+    
+    // EXTRACT DATA
     const { apiResponse } = location.state || {};
-    const { comparison, company, scraped_sources } = apiResponse || {};
+    const { comparison, company, scraped_sources, final_answer } = apiResponse || {};
 
     // --- STATE MANAGEMENT ---
     const [isEditMode, setIsEditMode] = useState(false);
@@ -29,9 +33,7 @@ const ComparisonPage: React.FC = () => {
     const [openSources, setOpenSources] = useState(false);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
-    // ... (rest of the file) ...
-
-    // --- DATA VALIDATION ---
+    // --- DATA SAFETY CHECK ---
     if (!comparison) {
         return (
             <Container maxWidth="md" sx={{ mt: 10, textAlign: 'center' }}>
@@ -52,8 +54,10 @@ const ComparisonPage: React.FC = () => {
 
     const handleDownload = (format: string) => {
         setAnchorEl(null);
+        
+        // 1. SWOT ONLY DOWNLOAD (Landscape)
         if (format === 'PDF') {
-            const doc = new jsPDF('l'); // Landscape for better table view
+            const doc = new jsPDF('l'); 
 
             // Header
             doc.setFontSize(20);
@@ -71,7 +75,7 @@ const ComparisonPage: React.FC = () => {
                 const headers = Object.keys(swotTable[0]).map(h => h.toUpperCase());
                 const body = swotTable.map((row: any) => Object.values(row) as string[]);
 
-                autoTable(doc, {
+                autoTableAny(doc, {
                     startY: yPos,
                     head: [headers],
                     body: body,
@@ -84,7 +88,7 @@ const ComparisonPage: React.FC = () => {
                 yPos = (doc as any).lastAutoTable.finalY + 15;
             }
 
-            // Market Position Summary
+            // Summary
             if (comparison.market_position_summary) {
                 doc.setFontSize(14);
                 doc.setTextColor(0);
@@ -98,14 +102,12 @@ const ComparisonPage: React.FC = () => {
 
             doc.save(`${company}_SWOT_Comparison.pdf`);
         }
+        // 2. FULL MERGED REPORT (Portrait)
         else if (format === 'MERGED') {
-            const doc = new jsPDF('p'); // Portrait for full report usually better, or user prefer landscape? ResultPage uses default (Portrait), Comparison uses Landscape. 
-            // Let's use Portrait for compatibility with text, but tables might be wide. 
-            // Let's stick to Portrait and handle tables carefully.
-
+            const doc = new jsPDF('p'); 
             const pageWidth = doc.internal.pageSize.width;
 
-            // --- PART 1: MARKET INTELLIGENCE ---
+            // --- PAGE 1: MARKET INTELLIGENCE ---
             doc.setFontSize(22);
             doc.setTextColor(0, 150, 136);
             doc.text(`Market Intelligence Report: ${company}`, 14, 20);
@@ -116,13 +118,20 @@ const ComparisonPage: React.FC = () => {
 
             let yPos = 40;
 
-            // 1.1 Metrics Extraction (Simplified version of ResultPage logic)
+            // 1.1 Key Metrics
             const metrics: [string, string][] = [];
-            const data = apiResponse?.final_answer?.extracted_data?.Key_Answer;
-            if (data && typeof data === 'object' && !Array.isArray(data)) {
-                Object.entries(data).forEach(([k, v]) => {
-                    if (v && typeof v === 'string') metrics.push([k.replace(/_/g, ' '), v]);
-                });
+            const keyAnswer = final_answer?.extracted_data?.Key_Answer;
+            
+            if (keyAnswer) {
+                if (typeof keyAnswer === 'string') {
+                    metrics.push(["Key Finding", keyAnswer]);
+                } else if (typeof keyAnswer === 'object' && !Array.isArray(keyAnswer)) {
+                    Object.entries(keyAnswer).forEach(([k, v]) => {
+                        if (v && (typeof v === 'string' || typeof v === 'number')) {
+                            metrics.push([k.replace(/_/g, ' '), String(v)]);
+                        }
+                    });
+                }
             }
 
             if (metrics.length > 0) {
@@ -131,7 +140,7 @@ const ComparisonPage: React.FC = () => {
                 doc.text("Key Statistics", 14, yPos);
                 yPos += 5;
 
-                autoTable(doc, {
+                autoTableAny(doc, {
                     startY: yPos,
                     head: [['Metric', 'Value']],
                     body: metrics,
@@ -143,7 +152,7 @@ const ComparisonPage: React.FC = () => {
             }
 
             // 1.2 Executive Summary
-            const summary = apiResponse?.final_answer?.summary;
+            const summary = final_answer?.summary;
             if (summary) {
                 doc.setFontSize(14);
                 doc.setTextColor(0);
@@ -153,27 +162,24 @@ const ComparisonPage: React.FC = () => {
                 doc.setTextColor(60);
                 const lines = doc.splitTextToSize(summary, pageWidth - 28);
                 doc.text(lines, 14, yPos);
-                yPos += (lines.length * 5) + 15;
             }
 
-            // --- PART 2: PAGE BREAK & COMPETITIVE ANALYSIS ---
+            // --- PAGE 2: COMPETITIVE ANALYSIS ---
             doc.addPage();
-            doc.setPage(2); // Helper? No need, addPage switches focus.
-            // Switch to Landscape ONLY if possible? mix-mode is hard in jsPDF. stay Portrait?
-            // If SWOT table is wide, Portrait might be tight. But standard paper is fine usually.
+            doc.setPage(2); 
 
             yPos = 20;
             doc.setFontSize(20);
             doc.setTextColor(0, 150, 136);
-            doc.text(`Competitive SWOT Analysis: ${company}`, 14, yPos);
+            doc.text(`Competitive SWOT Analysis`, 14, yPos);
             yPos += 20;
 
-            // 2.1 SWOT TABLE
+            // 2.1 SWOT Table
             if (swotTable.length > 0) {
                 const headers = Object.keys(swotTable[0]).map(h => h.toUpperCase());
                 const body = swotTable.map((row: any) => Object.values(row) as string[]);
 
-                autoTable(doc, {
+                autoTableAny(doc, {
                     startY: yPos,
                     head: [headers],
                     body: body,
@@ -187,9 +193,8 @@ const ComparisonPage: React.FC = () => {
 
             // 2.2 Market Position
             if (comparison.market_position_summary) {
-                // Check space
-                if (yPos > 240) { doc.addPage(); yPos = 20; }
-
+                if (yPos > 250) { doc.addPage(); yPos = 20; }
+                
                 doc.setFontSize(14);
                 doc.setTextColor(0);
                 doc.text("Market Position Summary", 14, yPos);
@@ -207,9 +212,8 @@ const ComparisonPage: React.FC = () => {
     return (
         <Container maxWidth="xl" sx={{ pb: 8, mt: 4 }}>
 
-            {/* TOP NAVIGATION HEADER (MATCHING RESULT PAGE) */}
+            {/* TOP NAVIGATION */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, borderBottom: '1px solid #eee', pb: 2 }}>
-                {/* 1. BACK BUTTON */}
                 <Button
                     startIcon={<ArrowBackIcon />}
                     onClick={() => navigate('/')}
@@ -218,7 +222,6 @@ const ComparisonPage: React.FC = () => {
                     Back
                 </Button>
 
-                {/* 2. REPORT TABS */}
                 <Box sx={{ display: 'flex', gap: 1, bgcolor: '#f4f6f8', p: 0.5, borderRadius: 2 }}>
                     <Button
                         variant="text"
@@ -249,35 +252,24 @@ const ComparisonPage: React.FC = () => {
                 </Box>
             </Box>
 
-            {/* TITLE & ACTIONS BAR */}
+            {/* TITLE & AVATAR BAR */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, mb: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    {/* COMPANY LOGO with Fallback */}
-                    <Box
-                        component="img"
-                        src={
-                            apiResponse?.logo ||
-                            `https://logo.clearbit.com/${apiResponse?.scraped_sources?.[0]?.title ||
-                            company.replace(/\s+/g, '').toLowerCase() + '.com'}`
-                        }
-                        onError={(e: any) => {
-                            e.target.onerror = null; // Prevent loop
-                            // Fallback to Google Favicon API
-                            if (e.target.src.includes('clearbit')) {
-                                e.target.src = `https://www.google.com/s2/favicons?domain=${company}&sz=128`;
-                            } else {
-                                // Final Fallback to Initials
-                                e.target.src = `https://ui-avatars.com/api/?name=${company}&background=0A66C2&color=fff&size=128&font-size=0.5`;
-                            }
+                    
+                    {/* 🟢 AVATAR LOGO FIX */}
+                    <Avatar 
+                        sx={{ 
+                            width: 64, 
+                            height: 64, 
+                            bgcolor: '#009688', 
+                            fontSize: '1.8rem', 
+                            fontWeight: 700,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
                         }}
-                        sx={{
-                            width: 64, height: 64, borderRadius: 2,
-                            objectFit: 'contain',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                            bgcolor: 'white',
-                            p: 1
-                        }}
-                    />
+                    >
+                        {company ? company.charAt(0).toUpperCase() : 'C'}
+                    </Avatar>
+
                     <Box>
                         <Typography variant="h2" component="h1" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: -1 }}>
                             {company}
