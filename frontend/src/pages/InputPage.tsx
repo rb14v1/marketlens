@@ -3,23 +3,92 @@ import { Box, Button, Typography, Container, Paper, TextField, Alert, Fade, Zoom
 import { useNavigate } from 'react-router-dom';
 import PublicIcon from '@mui/icons-material/Public'; // Agent 1 Icon
 import PsychologyIcon from '@mui/icons-material/Psychology'; // Agent 2 Icon
+<<<<<<< HEAD
+=======
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'; // Agent 3 Icon
+>>>>>>> final_version
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // Success Icon
 
 const InputPage: React.FC = () => {
     const [companyName, setCompanyName] = useState('');
     const [dataRequirements, setDataRequirements] = useState('');
+<<<<<<< HEAD
+    const [loadingStage, setLoadingStage] = useState<'idle' | 'agent1' | 'agent2' | 'success'>('idle');
+=======
     const [loadingStage, setLoadingStage] = useState<'idle' | 'agent1' | 'agent2' | 'agent3' | 'success'>('idle');
+>>>>>>> final_version
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
     // Timers ref to clear them if component unmounts or request finishes early
     const transitionTimer = useRef<NodeJS.Timeout | null>(null);
 
+<<<<<<< HEAD
+    const handleSubmit = async () => {
+        setLoadingStage('agent1'); // Start Animation
+        setError(null);
+
+        // 1. UX HACK: Automatically switch to "Agent 2" visual after 4 seconds (Previously 12s)
+        // This makes the user feel progress while waiting for the single backend response.
+        transitionTimer.current = setTimeout(() => {
+            setLoadingStage((prev) => (prev === 'agent1' ? 'agent2' : prev));
+        }, 4000);
+
+        try {
+            // ---------------------------------------------------------
+            // REAL BACKEND CALL
+            // ---------------------------------------------------------
+            const response = await fetch('http://54.210.254.63:8000/api/research/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    company_name: companyName,
+                    requirements: dataRequirements
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to connect to the Agent. Is Django running?');
+            }
+
+            const data = await response.json();
+
+            if (data.status === 'error') {
+                throw new Error(data.message || 'Agent failed to retrieve data');
+            }
+
+            // ---------------------------------------------------------
+            // SUCCESS: DATA RECEIVED
+            // ---------------------------------------------------------
+            // Clear the "Agent 2" timer if it hasn't fired yet
+            if (transitionTimer.current) clearTimeout(transitionTimer.current);
+
+            // Show Success Animation
+            setLoadingStage('success');
+
+            // Wait 1.5s for user to see the "Success" checkmark, then navigate
+            setTimeout(() => {
+                navigate('/results', {
+                    state: {
+                        apiResponse: data,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }, 1500);
+
+        } catch (err: any) {
+            console.error("API Error:", err);
+            setError(err.message || "Something went wrong.");
+            setLoadingStage('idle'); // Reset UI on error
+            if (transitionTimer.current) clearTimeout(transitionTimer.current);
+        }
+    };
+=======
     const [enableComparison, setEnableComparison] = useState(false);
     const [competitors, setCompetitors] = useState('');
 
 
+>>>>>>> final_version
 
     // Helper component for the animated circles
     const StatusCircle = ({ active, completed, icon: Icon, label }: any) => (
@@ -51,6 +120,44 @@ const InputPage: React.FC = () => {
 
     // --- LOGGING STATES ---
     const [logs, setLogs] = useState<string[]>([]);
+<<<<<<< HEAD
+    const [currentLogStep, setCurrentLogStep] = useState(0);
+
+    const logMessages = [
+        "Initializing Agent 1 (Web Scraper)...",
+        `Analyzing search intent for "${companyName}"...`,
+        "Identifying high-authority data sources...",
+        "Web Scraper engaged. Attempting to fetch company profile...",
+        "Parsing HTML content from identified urls...",
+        "Agent 1 task complete. Handing off to Agent 2...",
+        "Initializing Agent 2 (AI Analyst)...",
+        "Synthesizing extracted data...",
+        "Cross-referencing metrics (Revenue, CEO, HQ)...",
+        "Generating Executive Summary...",
+        "Final validation of report data...",
+        "Report ready."
+    ];
+
+    // Effect to simulate logs
+    useEffect(() => {
+        if (loadingStage !== 'idle' && loadingStage !== 'success') {
+            const interval = setInterval(() => {
+                setCurrentLogStep(prev => {
+                    if (prev < logMessages.length - 1) {
+                        // Add next log
+                        setLogs(old => [...old, logMessages[prev]]);
+                        return prev + 1;
+                    }
+                    return prev;
+                });
+            }, 800); // New log every 800ms
+            return () => clearInterval(interval);
+        } else if (loadingStage === 'idle') {
+            setLogs([]);
+            setCurrentLogStep(0);
+        }
+    }, [loadingStage, companyName]);
+=======
 
     // Auto-scroll to bottom of logs
     const logsEndRef = useRef<HTMLDivElement>(null);
@@ -139,6 +246,7 @@ const InputPage: React.FC = () => {
             setLoadingStage('idle');
         }
     };
+>>>>>>> final_version
 
     return (
         <Container maxWidth="sm">
@@ -187,6 +295,10 @@ const InputPage: React.FC = () => {
                                         icon={PsychologyIcon}
                                         label="Agent 2: AI Analyst"
                                         active={loadingStage === 'agent2'}
+<<<<<<< HEAD
+                                        completed={loadingStage === 'success'}
+                                    />
+=======
                                         completed={loadingStage === 'agent3' || loadingStage === 'success'}
                                     />
 
@@ -203,6 +315,7 @@ const InputPage: React.FC = () => {
                                             />
                                         </>
                                     )}
+>>>>>>> final_version
                                 </Box>
 
                                 {/* LOGGING WINDOW - SINGLE LINE UPDATE */}
@@ -213,8 +326,12 @@ const InputPage: React.FC = () => {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     textAlign: 'center',
+<<<<<<< HEAD
+                                    mt: 2
+=======
                                     mt: 2,
                                     px: 2
+>>>>>>> final_version
                                 }}>
                                     {loadingStage === 'success' ? (
                                         <Typography color="success.main" fontWeight={700} variant="h6">
@@ -222,16 +339,28 @@ const InputPage: React.FC = () => {
                                         </Typography>
                                     ) : (
                                         <Typography
+<<<<<<< HEAD
+                                            key={currentLogStep} // Key change triggers animation restart
+=======
                                             key={logs.length} // Key change triggers animation restart
+>>>>>>> final_version
                                             color="primary.main"
                                             fontWeight={600}
                                             sx={{
                                                 animation: 'fadeIn 0.5s ease-in-out',
+<<<<<<< HEAD
+                                                fontSize: '1.2rem',
+                                                textShadow: '0px 0px 1px rgba(0,0,0,0.1)'
+                                            }}
+                                        >
+                                            {logMessages[currentLogStep]}
+=======
                                                 fontSize: '1.1rem',
                                                 textShadow: '0px 0px 1px rgba(0,0,0,0.1)'
                                             }}
                                         >
                                             {logs.length > 0 ? logs[logs.length - 1] : "Initializing..."}
+>>>>>>> final_version
                                         </Typography>
                                     )}
                                 </Box>
@@ -265,6 +394,15 @@ const InputPage: React.FC = () => {
                                     />
                                 </Box>
 
+<<<<<<< HEAD
+                                <Box sx={{ mb: 4 }}>
+                                    <TextField
+                                        fullWidth label="Data Requirements"
+                                        value={dataRequirements} onChange={(e) => setDataRequirements(e.target.value)}
+                                        placeholder="e.g. Who is the CEO and what is their email address?"
+                                        multiline rows={4} variant="outlined" InputLabelProps={{ shrink: true }}
+                                    />
+=======
                                 <TextField
                                     fullWidth label="Data Requirements"
                                     value={dataRequirements} onChange={(e) => setDataRequirements(e.target.value)}
@@ -302,6 +440,7 @@ const InputPage: React.FC = () => {
                                             </Box>
                                         </Fade>
                                     )}
+>>>>>>> final_version
                                 </Box>
 
                                 <Button
@@ -317,7 +456,11 @@ const InputPage: React.FC = () => {
                     )}
                 </Paper>
             </Box>
+<<<<<<< HEAD
+        </Container>
+=======
         </Container >
+>>>>>>> final_version
     );
 };
 
