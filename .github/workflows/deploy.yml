@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - final_version
+      - deployed_branch
 
 jobs:
   deploy:
