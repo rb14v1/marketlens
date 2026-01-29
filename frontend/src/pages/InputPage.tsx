@@ -64,7 +64,7 @@ const InputPage: React.FC = () => {
         setLogs([]);
 
         try {
-            const response = await fetch('http://localhost:8000/api/research/', {
+            const response = await fetch('http://54.210.254.63:8000/api/research/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
