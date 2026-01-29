@@ -295,7 +295,7 @@ const ResultPage: React.FC = () => {
             {/* METRICS GRID */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 {Object.entries(metrics).map(([key, value], index) => (
-                    <Grid item xs={12} md={4} key={index}>
+                    <Grid size={{ xs: 12, md: 4 }} key={index}>
                         <Card elevation={0} sx={{ height: '100%', border: '1px solid #eee', borderRadius: 4, p: 1 }}>
                             <CardContent sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                                 <Box sx={{ bgcolor: '#f5f9f9', p: 1.5, borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -326,7 +326,7 @@ const ResultPage: React.FC = () => {
                     </Grid>
                 ))}
                 {Object.keys(metrics).length === 0 && (
-                    <Grid item xs={12}><Typography color="text.secondary" fontStyle="italic">No specific metrics extracted. See summary below.</Typography></Grid>
+                    <Grid size={{ xs: 12 }}><Typography color="text.secondary" fontStyle="italic">No specific metrics extracted. See summary below.</Typography></Grid>
                 )}
             </Grid>
 

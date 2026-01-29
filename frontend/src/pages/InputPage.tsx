@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Button, Typography, Container, Paper, TextField, Alert, Fade, Zoom } from '@mui/material';
+import { Box, Button, Typography, Container, Paper, TextField, Alert, Fade } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import PublicIcon from '@mui/icons-material/Public'; // Agent 1 Icon
 import PsychologyIcon from '@mui/icons-material/Psychology'; // Agent 2 Icon
@@ -14,7 +14,7 @@ const InputPage: React.FC = () => {
     const navigate = useNavigate();
 
     // Timers ref to clear them if component unmounts or request finishes early
-    const transitionTimer = useRef<NodeJS.Timeout | null>(null);
+    // const transitionTimer = useRef<NodeJS.Timeout | null>(null);
 
     const [enableComparison, setEnableComparison] = useState(false);
     const [competitors, setCompetitors] = useState('');
