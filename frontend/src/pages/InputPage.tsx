@@ -63,10 +63,16 @@ const InputPage: React.FC = () => {
         setError(null);
         setLogs([]);
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000);
+
         try {
+
+
             const response = await fetch('/api/research/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal,
                 body: JSON.stringify({
                     company_name: companyName,
                     requirements: dataRequirements,
@@ -74,6 +80,7 @@ const InputPage: React.FC = () => {
                     competitor_names: competitors
                 }),
             });
+            
 
             if (!response.ok) throw new Error('Failed to connect to the Agent.');
             if (!response.body) throw new Error('No response body received.');
@@ -105,6 +112,7 @@ const InputPage: React.FC = () => {
                             if (event.message.includes("Agent 3")) setLoadingStage('agent3');
                         }
                         else if (event.type === 'complete') {
+                            clearTimeout(timeoutId);
                             setLoadingStage('success');
                             // Delay navigation slightly to show success
                             setTimeout(() => {
@@ -134,6 +142,9 @@ const InputPage: React.FC = () => {
             }
 
         } catch (err: any) {
+
+            clearTimeout(timeoutId);
+
             console.error("API Error:", err);
             setError(err.message || "Something went wrong.");
             setLoadingStage('idle');
