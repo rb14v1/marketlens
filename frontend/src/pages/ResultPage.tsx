@@ -43,6 +43,15 @@ const ResultPage: React.FC = () => {
         );
     }
 
+    // --- PDF TEXT CLEANER ---
+    const cleanTextForPDF = (text: string) => {
+        if (!text) return "";
+        return text
+            .replace(/₹/g, 'Rs. ')   // Replace Rupee symbol with 'Rs.'
+            .replace(/•/g, '- ')    // Replace bullet points with dash
+            .replace(/[^\x00-\x7F]/g, ""); // Remove other non-ASCII characters
+    };
+
     // 2. DESTRUCTURE DATA
     const { company, final_answer, scraped_sources, comparison } = apiResponse;
     const { summary, extracted_data } = final_answer || { summary: "Analysis failed or incomplete.", extracted_data: {} };
@@ -72,7 +81,7 @@ const ResultPage: React.FC = () => {
             if (extracted_data.Key_Answer) {
                 if (isValidValue(extracted_data.Key_Answer) && typeof extracted_data.Key_Answer !== 'object') {
                     initialMetrics["Answer"] = String(extracted_data.Key_Answer);
-                } 
+                }
                 else if (typeof extracted_data.Key_Answer === 'object' && !Array.isArray(extracted_data.Key_Answer)) {
                     Object.entries(extracted_data.Key_Answer).forEach(([k, v]) => {
                         const strVal = processValue(v);
@@ -132,13 +141,15 @@ const ResultPage: React.FC = () => {
             doc.setFontSize(20);
             doc.setTextColor(0, 150, 136);
             doc.text(`Market Intelligence Report: ${company}`, 14, 20);
-            
+
             // Date
             doc.setFontSize(10);
             doc.setTextColor(100);
             doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 28);
 
             let yPos = 40;
+
+            // ... inside handleDownload ...
 
             // Metrics Table
             if (Object.keys(metrics).length > 0) {
@@ -147,7 +158,12 @@ const ResultPage: React.FC = () => {
                 doc.text("Key Statistics", 14, yPos);
                 yPos += 5;
 
-                const statsData = Object.entries(metrics).map(([k, v]) => [k.replace(/_/g, ' '), v]);
+                // 🟢 APPLY CLEANER HERE
+                const statsData = Object.entries(metrics).map(([k, v]) => [
+                    cleanTextForPDF(k.replace(/_/g, ' ')),
+                    cleanTextForPDF(v)
+                ]);
+
                 autoTable(doc, {
                     startY: yPos,
                     head: [['Metric', 'Value']],
@@ -167,9 +183,15 @@ const ResultPage: React.FC = () => {
 
             doc.setFontSize(11);
             doc.setTextColor(60);
-            const summaryLines = doc.splitTextToSize(editableSummary || "No summary available.", pageWidth - 28);
+
+            // 🟢 APPLY CLEANER HERE TOO
+            const cleanSummary = cleanTextForPDF(editableSummary || "No summary available.");
+            const summaryLines = doc.splitTextToSize(cleanSummary, pageWidth - 28);
+
             doc.text(summaryLines, 14, yPos);
             yPos += (summaryLines.length * 5) + 15;
+
+            // ... (rest of the code remains the same)
 
             // Details
             if (editableDetails) {
@@ -226,16 +248,16 @@ const ResultPage: React.FC = () => {
             {/* HEADER AREA */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, mb: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    
+
                     {/* 🟢 REPLACED LOGO WITH GENERIC AVATAR */}
-                    <Avatar 
-                        sx={{ 
-                            width: 72, 
-                            height: 72, 
+                    <Avatar
+                        sx={{
+                            width: 72,
+                            height: 72,
                             bgcolor: '#009688', // Teal color
-                            fontSize: '2rem', 
+                            fontSize: '2rem',
                             fontWeight: 700,
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                         }}
                     >
                         {company ? company.charAt(0).toUpperCase() : 'C'}
@@ -286,7 +308,17 @@ const ResultPage: React.FC = () => {
                                     {isEditMode ? (
                                         <TextField fullWidth variant="standard" value={value} onChange={(e) => handleMetricChange(key, e.target.value)} InputProps={{ style: { fontSize: '1.25rem', fontWeight: 700 } }} />
                                     ) : (
-                                        <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>{value}</Typography>
+                                        <Typography
+                                            variant="body1"
+                                            fontWeight={600}
+                                            sx={{
+                                                lineHeight: 1.6,
+                                                whiteSpace: 'pre-line',  // <--- THIS IS THE MAGIC FIX
+                                                wordBreak: 'break-word'
+                                            }}
+                                        >
+                                            {value}
+                                        </Typography>
                                     )}
                                 </Box>
                             </CardContent>
@@ -307,7 +339,7 @@ const ResultPage: React.FC = () => {
                     ) : (
                         <Typography paragraph sx={{ color: 'text.secondary', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{editableSummary}</Typography>
                     )}
-                    
+
                     {editableDetails && (
                         isEditMode ? (
                             <TextField fullWidth multiline minRows={2} variant="outlined" label="Additional Details" value={editableDetails} onChange={(e) => setEditableDetails(e.target.value)} sx={{ mt: 2 }} />
@@ -327,9 +359,9 @@ const ResultPage: React.FC = () => {
                             scraped_sources.map((src: any, index: number) => (
                                 <ListItem key={index} component="a" href={typeof src === 'string' ? '#' : src.url} target="_blank" disablePadding sx={{ py: 1, textDecoration: 'none', color: 'inherit', '&:hover': { bgcolor: 'action.hover' } }}>
                                     <ListItemIcon sx={{ minWidth: 36 }}><ArticleIcon fontSize="small" color="primary" /></ListItemIcon>
-                                    <ListItemText 
-                                        primary={typeof src === 'string' ? src : src.title} 
-                                        secondary={typeof src === 'string' ? null : src.url} 
+                                    <ListItemText
+                                        primary={typeof src === 'string' ? src : src.title}
+                                        secondary={typeof src === 'string' ? null : src.url}
                                         primaryTypographyProps={{ fontWeight: 600, color: 'primary.main' }}
                                         secondaryTypographyProps={{ noWrap: true, display: 'block' }}
                                     />

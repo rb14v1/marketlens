@@ -12,54 +12,56 @@ client = AzureOpenAI(
 
 def compare_companies(primary_company, primary_data, competitor_data_list):
     """
-    Agent 3: Competitive Comparison.
-    Dynamically builds the table structure to ensure ALL competitors are included.
+    🚀 FIXED AGENT 3: No Duplicates + Faster
     """
     print(f"Agent 3: Comparing {primary_company} against {len(competitor_data_list)} competitors...")
 
-    # 1. Prepare Data Context
     competitor_context = ""
     competitor_names = []
     
     for comp in competitor_data_list:
         name = comp['name']
         competitor_names.append(name)
-        competitor_context += f"\n<<< DATA FOR COMPETITOR: {name} >>>\n{comp.get('data', 'No data available')}\n"
+        
+        # ⚡ SPEED FIX: Reduced to 6,000 characters.
+        # This is the "Sweet Spot" - fast enough for 30s response, detailed enough for a table.
+        raw_data = comp.get('data', 'No data available')[:6000]
+        
+        competitor_context += f"\n<<< DATA FOR COMPETITOR: {name} >>>\n{raw_data}\n"
 
-    # 2. 🟢 DYNAMIC JSON EXAMPLE GENERATOR
-    # This forces the AI to output columns for exactly the competitors we found.
-    example_row = f'{{ "category": "Strengths", "{primary_company}": "• Item 1", '
+        
+    # Pre-build the structure to guide the AI
+    example_row = f'{{ "category": "Strengths", "{primary_company}": "• Point 1\\n• Point 2", '
     for name in competitor_names:
-        example_row += f'"{name}": "• Strength A", '
+        example_row += f'"{name}": "• Point A\\n• Point B", '
     example_row = example_row.rstrip(", ") + " }"
 
     prompt = f"""
-    You are a Senior Market Strategy Consultant (Agent 3).
+    You are a Senior Strategy Consultant.
     
-    TASK: Perform a SWOT comparison between {primary_company} and its competitors: {", ".join(competitor_names)}.
+    TASK: Create a SWOT comparison table for: {primary_company} vs {", ".join(competitor_names)}.
     
-    CRITICAL RULES:
-    1. **NO CONTAMINATION**: When filling a competitor's column, ONLY use data from that competitor's section below. Do NOT copy {primary_company}'s data.
-    2. **ALL COLUMNS**: The output table MUST have a column for "{primary_company}" and columns for: {", ".join(competitor_names)}.
-    3. **STRICT SWOT**: Generate exactly 4 rows: "Strengths", "Weaknesses", "Opportunities", "Threats".
-    4. **FORMAT**: Use bullet points (•). Keep them concise.
-    5. **MISSING DATA**: If data is missing for a specific cell, write "N/A".
+    CRITICAL FORMATTING RULES:
+    1. **NO DUPLICATE ROWS**: You must output EXACTLY 4 rows: "Strengths", "Weaknesses", "Opportunities", "Threats".
+    2. **MERGE DATA**: If you have multiple points for "Strengths", combine them into ONE cell using line breaks (\\n) or bullet points. DO NOT create a second "Strengths" row.
+    3. **CONCISE & FAST**: Keep bullet points impactful but under 15 words.
+    4. **JSON ONLY**: Output valid JSON.
     
-    PRIMARY COMPANY DATA ({primary_company}):
-    {json.dumps(primary_data, indent=2)}
+    PRIMARY COMPANY DATA:
+    {json.dumps(primary_data, indent=2)[:4000]} 
     
-    COMPETITOR RAW DATA:
+    COMPETITOR DATA:
     {competitor_context}
     
-    OUTPUT JSON FORMAT (Strictly follow this structure):
+    OUTPUT JSON FORMAT:
     {{
         "swot_table": [
             {example_row},
-            {{ "category": "Weaknesses", ... (same columns) }},
-            {{ "category": "Opportunities", ... (same columns) }},
-            {{ "category": "Threats", ... (same columns) }}
+            {{ "category": "Weaknesses", ... }},
+            {{ "category": "Opportunities", ... }},
+            {{ "category": "Threats", ... }}
         ],
-        "market_position_summary": "A 2-sentence summary comparing these companies."
+        "market_position_summary": "2-sentence summary of the market landscape."
     }}
     """
 
@@ -67,14 +69,18 @@ def compare_companies(primary_company, primary_data, competitor_data_list):
         response = client.chat.completions.create(
             model=os.getenv("AZURE_DEPLOYMENT_NAME"),
             messages=[
-                {"role": "system", "content": "You are a helpful API that outputs only JSON."},
+                {"role": "system", "content": "You are a helpful API. Output JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0,
-            response_format={"type": "json_object"}
+            temperature=0.1, # Lower temperature reduces "hallucinating" extra rows
+            response_format={"type": "json_object"},
+            timeout=35 
         )
         return json.loads(response.choices[0].message.content)
 
     except Exception as e:
         print(f"Agent 3 Error: {e}")
-        return {"error": str(e)}
+        return {
+            "swot_table": [],
+            "market_position_summary": f"Comparison failed due to error: {str(e)}"
+        }

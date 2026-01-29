@@ -1,17 +1,17 @@
 from rest_framework.views import APIView
 from django.http import StreamingHttpResponse
-from .roc_tool import fetch_roc_data           # Agent 1 (The Collector)
-from .agent_2_validator import validate_and_extract    # Agent 2 (The Analyst)
+
+from .roc_tool import fetch_roc_data           # Agent 1
+from .agent_2_validator import validate_and_extract    # Agent 2
 from .models import Company, CompanyRawData
 import json
-import concurrent.futures  # 🟢 REQUIRED FOR FAST PARALLEL SEARCH
+import concurrent.futures
 
 class CompanyResearchView(APIView):
     def post(self, request):
         # 1. Get User Inputs
         try:
             data = request.data
-            # Fallback for manual JSON body parsing if DRF didn't parse it
             if not data and request.body:
                  data = json.loads(request.body)
             
@@ -35,7 +35,8 @@ class CompanyResearchView(APIView):
                 # PHASE 1: Agent 1 (Scrape Primary Company)
                 # ====================================================
                 agent_1_response = None
-                for event in fetch_roc_data(company_name, requirements):
+                # Run standard deep search for the main company
+                for event in fetch_roc_data(company_name, requirements, lite_mode=False):
                     if event['type'] == 'log':
                          yield f"data: {json.dumps(event)}\n\n"
                     elif event['type'] == 'result':
@@ -76,7 +77,7 @@ class CompanyResearchView(APIView):
                         final_insight = event['payload']
 
                 # ====================================================
-                # 🟢 PHASE 4: OPTIMIZED PARALLEL COMPARISON
+                # 🟢 PHASE 4: TURBO PARALLEL COMPARISON
                 # ====================================================
                 comparison_result = None
                 competitors = []
@@ -84,35 +85,46 @@ class CompanyResearchView(APIView):
                 if enable_comparison:
                     if competitor_names_str:
                         competitors = [c.strip() for c in competitor_names_str.split(',') if c.strip()]
-                    elif final_insight and final_insight.get("extracted_data"):
-                        auto_comps = final_insight["extracted_data"].get("Competitors")
+                    elif final_insight:
+                        # 🟢 CRITICAL FIX: Look in the new HIDDEN field first, then fallback to extracted
+                        # This ensures the comparison runs even if Agent 2 is in "Strict Mode"
+                        auto_comps = final_insight.get("competitors_list") or final_insight.get("extracted_data", {}).get("Competitors")
+                        
                         if auto_comps and isinstance(auto_comps, list):
-                            competitors = auto_comps[:3]
-                            yield f"data: {json.dumps({'type': 'log', 'message': f'Auto-detected competitors: {competitors}'})}\n\n"
+                            # ⚡ SPEED LIMIT: Top 2 Competitors Only
+                            competitors = auto_comps[:2]
+                            yield f"data: {json.dumps({'type': 'log', 'message': f'Auto-detected top 2 competitors: {competitors}'})}\n\n"
+                    
+                    # Safety check: Force max 2 if manual input was long
+                    competitors = competitors[:2]
 
                 if enable_comparison and competitors:
                     try:
                         from .agent_3_comparison import compare_companies
-                        yield f"data: {json.dumps({'type': 'log', 'message': f'Agent 3: Analyzing {len(competitors)} competitors simultaneously...'})}\n\n"
+                        yield f"data: {json.dumps({'type': 'log', 'message': f'Agent 3: Quick-scanning {len(competitors)} competitors...'})}\n\n"
 
                         competitor_data_list = []
-                        clean_comp_query = "official corporate profile facts strengths weaknesses market position"
 
-                        # 🟢 Helper function to run inside threads
-                        def fetch_competitor_data(comp_name):
-                            full_text = ""
-                            # We iterate the generator to completion to get the final result
-                            for event in fetch_roc_data(comp_name, clean_comp_query):
+                        # 🟢 Helper function: FETCH 2 SOURCES (Better Quality)
+                        def fetch_competitor_fast(comp_name):
+                            collected_texts = []
+                            # We still use lite_mode=True (searches 3 pages max)
+                            # But now we collect the top 2 valid texts instead of just 1
+                            for event in fetch_roc_data(comp_name, "official profile facts", lite_mode=True):
                                 if event['type'] == 'result' and event['payload'].get("status") == "success":
-                                    # Grab top 2 sources only to save time/tokens
-                                    texts = [e['raw_text'] for e in event['payload'].get("data", [])[:2]]
-                                    full_text = "\n".join(texts)
+                                    data_items = event['payload'].get("data", [])
+                                    # Grab up to 2 sources
+                                    for item in data_items[:2]: 
+                                        collected_texts.append(item['raw_text'])
+                                    break # Stop generator after getting the batch
+                            
+                            # Combine them so Agent 3 has more context to work with
+                            full_text = "\n\n".join(collected_texts)[:20000] 
                             return {"name": comp_name, "data": full_text}
 
-                        # 🟢 ThreadPoolExecutor runs searches in PARALLEL
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                            # Submit all tasks
-                            future_to_comp = {executor.submit(fetch_competitor_data, comp): comp for comp in competitors}
+                        # 🟢 ThreadPoolExecutor: Run 2-3 searches at once
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                            future_to_comp = {executor.submit(fetch_competitor_fast, comp): comp for comp in competitors}
                             
                             for future in concurrent.futures.as_completed(future_to_comp):
                                 comp_name = future_to_comp[future]
@@ -120,14 +132,15 @@ class CompanyResearchView(APIView):
                                     data = future.result()
                                     if data["data"]:
                                         competitor_data_list.append(data)
-                                        yield f"data: {json.dumps({'type': 'log', 'message': f'✔ Data fetched for {comp_name}'})}\n\n"
+                                        yield f"data: {json.dumps({'type': 'log', 'message': f'✔ Data found for {comp_name}'})}\n\n"
                                     else:
-                                        yield f"data: {json.dumps({'type': 'log', 'message': f'⚠ No data found for {comp_name}'})}\n\n"
+                                        yield f"data: {json.dumps({'type': 'log', 'message': f'⚠ No data for {comp_name}'})}\n\n"
                                 except Exception as exc:
                                     yield f"data: {json.dumps({'type': 'log', 'message': f'Error searching {comp_name}: {exc}'})}\n\n"
 
                         if competitor_data_list:
                              comparison_result = compare_companies(company_name, final_insight, competitor_data_list)
+                    
                     except Exception as e:
                         import traceback
                         print(f"Agent 3 Error: {traceback.format_exc()}")
@@ -156,7 +169,7 @@ class CompanyResearchView(APIView):
                     "total_sources": len(sources_formatted),
                     "final_answer": final_insight,
                     "comparison": comparison_result,
-                    "logo": None # Explicitly None as requested
+                    "logo": agent_1_response.get("logo") # Restore Logo if available
                 }
                 yield f"data: {json.dumps({'type': 'complete', 'payload': final_payload})}\n\n"
             
