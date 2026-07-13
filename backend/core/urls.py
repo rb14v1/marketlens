@@ -16,6 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path , include
+from django.http import JsonResponse
+
+def healthz(request):
+    return JsonResponse({"status": "ok"})
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,5 +28,6 @@ urlpatterns = [
 urlpatterns = [
     path('admin/', admin.site.urls),
     # This connects your 'agents' app URLs to the main project
-    path('api/', include('agents.urls')), 
+    path('api/', include('agents.urls')),
+    path('healthz', healthz, name='healthz'),
 ]
