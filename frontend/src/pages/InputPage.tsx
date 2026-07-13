@@ -38,7 +38,7 @@ const InputPage: React.FC = () => {
             // ---------------------------------------------------------
             // REAL BACKEND CALL
             // ---------------------------------------------------------
-            const response = await fetch('http://54.210.254.63:8000/api/research/', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/research/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -171,7 +171,7 @@ const InputPage: React.FC = () => {
         setLogs([]);
 
         try {
-            const response = await fetch('http://localhost:8000/api/research/', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/research/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
