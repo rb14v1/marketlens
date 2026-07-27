@@ -25,7 +25,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-i8d*!rjvn$5yj(g_4hxqic7^_564*ptk!&64&0cajh#!m62zk#')
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("DJANGO_SECRET_KEY environment variable is not set")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
@@ -89,10 +91,40 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Database configuration — driven entirely by the DATABASE_URL environment variable.
+# For local development set DATABASE_URL=sqlite:///db.sqlite3 in your .env file.
+# For production use a full connection string, e.g.:
+#   postgresql://user:password@host:5432/dbname
+_DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+
+import urllib.parse as _urlparse  # stdlib — no extra dependency needed
+
+_db_url = _urlparse.urlparse(_DATABASE_URL)
+_db_scheme = _db_url.scheme.split('+')[0]  # handle e.g. "postgresql+psycopg2"
+
+_ENGINE_MAP = {
+    'sqlite': 'django.db.backends.sqlite3',
+    'postgresql': 'django.db.backends.postgresql',
+    'postgres': 'django.db.backends.postgresql',
+    'mysql': 'django.db.backends.mysql',
+    'oracle': 'django.db.backends.oracle',
+}
+
+_db_engine = _ENGINE_MAP.get(_db_scheme, 'django.db.backends.sqlite3')
+_db_name = _db_url.path.lstrip('/') if _db_scheme != 'sqlite' else _db_url.path.lstrip('/')
+
+# For SQLite, resolve relative paths against BASE_DIR
+if _db_scheme == 'sqlite' and not _db_url.path.startswith('/'):
+    _db_name = str(BASE_DIR / _db_name)
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': _db_engine,
+        'NAME': _db_name,
+        'USER': _db_url.username or '',
+        'PASSWORD': _db_url.password or '',
+        'HOST': _db_url.hostname or '',
+        'PORT': str(_db_url.port) if _db_url.port else '',
     }
 }
 
