@@ -1,4 +1,7 @@
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import SessionAuthentication
+from mozilla_django_oidc.contrib.drf import OIDCAuthentication
 <<<<<<< HEAD
 from rest_framework.response import Response
 from .roc_tool import fetch_roc_data           # Agent 1 (The Collector)
@@ -14,6 +17,11 @@ import concurrent.futures  # 🟢 REQUIRED FOR FAST PARALLEL SEARCH
 >>>>>>> final_version
 
 class CompanyResearchView(APIView):
+    # Require a valid OIDC-issued session for every request.
+    # Unauthenticated callers receive HTTP 401.
+    authentication_classes = [OIDCAuthentication, SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         # 1. Get User Inputs
 <<<<<<< HEAD
