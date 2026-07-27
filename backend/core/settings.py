@@ -88,13 +88,36 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+#
+# In production, set the DATABASE_URL environment variable to a PostgreSQL DSN:
+#   DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DBNAME
+# When DATABASE_URL is absent (local dev / CI), the app falls back to SQLite.
+# The production PostgreSQL instance is provisioned by infra/database.tf, which
+# enables automated daily backups with 30-day retention, cross-region backup
+# replication, and point-in-time recovery (PITR).
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+_db_url = os.environ.get('DATABASE_URL', '')
+
+if _db_url.startswith('postgres'):
+    import urllib.parse as _urlparse
+    _parsed = _urlparse.urlparse(_db_url)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': _parsed.path.lstrip('/'),
+            'USER': _parsed.username,
+            'PASSWORD': _parsed.password,
+            'HOST': _parsed.hostname,
+            'PORT': _parsed.port or 5432,
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
