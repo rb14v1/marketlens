@@ -46,12 +46,22 @@ INSTALLED_APPS = [
     'rest_framework',
     'agents',
     'corsheaders',
+    'mozilla_django_oidc',
 ]
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-    ]
+    ],
+    # All API endpoints require a valid OIDC-issued session by default.
+    # Unauthenticated requests receive HTTP 401.
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'mozilla_django_oidc.contrib.drf.OIDCAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
 }
 
 
@@ -62,6 +72,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Refreshes the OIDC token on each request and redirects browser clients
+    # to the identity provider when the session has expired.
+    'mozilla_django_oidc.middleware.SessionRefresh',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -145,6 +158,55 @@ CORS_ALLOW_ALL_ORIGINS = True
 # CORS_ALLOWED_ORIGINS = [
 #     "http://localhost:3000",
 #     "http://127.0.0.1:3000",
-#     "http://localhost:5173",   
+#     "http://localhost:5173",
 #     "http://127.0.0.1:5173",
 # ]
+
+
+# ---------------------------------------------------------------------------
+# OIDC / OAuth2 — Authentication via Identity Provider
+# ---------------------------------------------------------------------------
+# Set the following environment variables before running the application:
+#
+#   OIDC_RP_CLIENT_ID            – OAuth2 client ID issued by the IdP
+#   OIDC_RP_CLIENT_SECRET        – OAuth2 client secret issued by the IdP
+#   OIDC_OP_AUTHORIZATION_ENDPOINT – IdP's /authorize URL
+#   OIDC_OP_TOKEN_ENDPOINT         – IdP's /token URL
+#   OIDC_OP_USER_ENDPOINT          – IdP's /userinfo URL
+#   OIDC_OP_JWKS_ENDPOINT          – IdP's JWKS (public key) URL
+#   OIDC_RP_SIGN_ALGO              – JWT signing algorithm (default RS256)
+#
+# Example for Microsoft Entra ID (Azure AD):
+#   OIDC_OP_AUTHORIZATION_ENDPOINT=https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize
+#   OIDC_OP_TOKEN_ENDPOINT=https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token
+#   OIDC_OP_USER_ENDPOINT=https://graph.microsoft.com/oidc/userinfo
+#   OIDC_OP_JWKS_ENDPOINT=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys
+
+OIDC_RP_CLIENT_ID = os.environ.get('OIDC_RP_CLIENT_ID', '')
+OIDC_RP_CLIENT_SECRET = os.environ.get('OIDC_RP_CLIENT_SECRET', '')
+OIDC_OP_AUTHORIZATION_ENDPOINT = os.environ.get('OIDC_OP_AUTHORIZATION_ENDPOINT', '')
+OIDC_OP_TOKEN_ENDPOINT = os.environ.get('OIDC_OP_TOKEN_ENDPOINT', '')
+OIDC_OP_USER_ENDPOINT = os.environ.get('OIDC_OP_USER_ENDPOINT', '')
+OIDC_OP_JWKS_ENDPOINT = os.environ.get('OIDC_OP_JWKS_ENDPOINT', '')
+OIDC_RP_SIGN_ALGO = os.environ.get('OIDC_RP_SIGN_ALGO', 'RS256')
+
+# Where to send users after login / logout
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+
+# Use the OIDC backend first, fall back to Django's built-in backend
+# (the built-in backend is kept so the /admin interface continues to work)
+AUTHENTICATION_BACKENDS = [
+    'mozilla_django_oidc.auth.OIDCAuthenticationBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# ---------------------------------------------------------------------------
+# Session cookie security
+# Session data is kept server-side (Django's DB-backed session store).
+# The cookie itself is HttpOnly so JavaScript cannot access it.
+# ---------------------------------------------------------------------------
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_HTTPONLY = True          # Prevents JS access — always True
+SESSION_COOKIE_SECURE = not DEBUG       # Transmit over HTTPS only in production
+SESSION_COOKIE_SAMESITE = 'Lax'        # CSRF mitigation for same-site requests
