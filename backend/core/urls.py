@@ -30,4 +30,7 @@ urlpatterns = [
     # This connects your 'agents' app URLs to the main project
     path('api/', include('agents.urls')),
     path('healthz', healthz, name='healthz'),
+    # OIDC login / callback / logout endpoints provided by mozilla-django-oidc
+    # Handles:  /oidc/authenticate/  /oidc/callback/  /oidc/logout/
+    path('oidc/', include('mozilla_django_oidc.urls')),
 ]
